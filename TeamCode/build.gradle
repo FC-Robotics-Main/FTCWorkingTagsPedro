@@ -1,0 +1,34 @@
+apply from: '../build.common.gradle'
+apply from: '../build.dependencies.gradle'
+
+android {
+    namespace = 'org.firstinspires.ftc.teamcode'
+
+    packagingOptions {
+        jniLibs.useLegacyPackaging true
+    }
+}
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url "https://repo.dairy.foundation/releases" }
+        maven { url = 'https://maven.brott.dev/' }
+    }
+    dependencies {
+        classpath "dev.frozenmilk:Load:0.2.4"
+    }
+}
+
+repositories {
+    google()
+    maven { url = "https://repo.dairy.foundation/releases" }
+    maven { url = "https://repo.dairy.foundation/snapshots" }
+    maven { url = 'https://maven.brott.dev/' }
+}
+
+dependencies {
+    implementation project(':FtcRobotController')
+    implementation("dev.frozenmilk.sinister:Sloth:0.2.4")
+}
