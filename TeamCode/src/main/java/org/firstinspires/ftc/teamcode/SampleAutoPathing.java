@@ -28,6 +28,9 @@ public class SampleAutoPathing extends OpMode {
     private static final boolean RUN_APRILTAG = false;
     private static final int TARGET_TAG_ID = 11;
     private boolean aprilTagDone = false;
+
+
+
     private Follower follower;
     private TelemetryLog telemetryLog;
     private Timer pathTimer;
@@ -218,6 +221,9 @@ public class SampleAutoPathing extends OpMode {
                 Log.i(TAG, "path: starting leg5");
                 follower.followPath(leg5, true);
                 leg5Started = true;
+            }
+            if (leg5Started && !follower.isBusy()) {
+                follower.breakFollowing();
             }
         }
         telemetryLog.addData("X", follower.getPose().getX());
