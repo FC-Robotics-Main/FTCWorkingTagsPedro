@@ -22,6 +22,17 @@
 
 package org.firstinspires.ftc.teamcode.Prism;
 
+/* =====================================================================================
+ * PrismAnimations  (goBILDA vendor library — do not modify)
+ * -------------------------------------------------------------------------------------
+ * Defines all 12 animation types supported by the goBILDA Prism RGB LED Controller.
+ * Each animation is a static inner class (e.g. Solid, Blink, Rainbow) with builder-
+ * style setters for color, brightness, speed, start/end LED index, etc.
+ * Animations are passed to GoBildaPrismDriver.insertAndUpdateAnimation() to display
+ * them, or saved to an Artboard for instant recall during a match.
+ * =====================================================================================
+ */
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.concurrent.TimeUnit;

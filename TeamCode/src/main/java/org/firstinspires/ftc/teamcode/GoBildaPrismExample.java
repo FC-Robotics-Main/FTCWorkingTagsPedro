@@ -22,6 +22,21 @@
 
 package org.firstinspires.ftc.teamcode;
 
+/* =====================================================================================
+ * GoBildaPrismExample  (goBILDA vendor example — do not modify for competition use)
+ * -------------------------------------------------------------------------------------
+ * WHAT THIS OP MODE DOES:
+ *   Demonstrates how to create Animations directly in Java and push them to the
+ *   goBILDA Prism RGB LED controller. Press A to start playing a Solid + RainbowSnakes
+ *   layered animation; press X to clear all animations; press D-Pad Down to save
+ *   the current animations to Artboard #0 on the device.
+ *
+ * WHAT IT'S FOR:
+ *   Learning reference only. For setting up your competition Artboards, use
+ *   GoBildaPrismConfigurator (interactive UI). To recall saved Artboards during a
+ *   match, use GoBildaPrismArtboardExample as a template.
+ * =====================================================================================
+ */
 
 import static org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver.LayerHeight;
 

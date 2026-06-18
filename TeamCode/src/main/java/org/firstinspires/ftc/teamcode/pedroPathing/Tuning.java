@@ -1,5 +1,27 @@
 package org.firstinspires.ftc.teamcode.pedroPathing;
 
+/* =====================================================================================
+ * Tuning  (Pedro Pathing framework file — do not modify)
+ * -------------------------------------------------------------------------------------
+ * WHAT THIS OP MODE DOES:
+ *   Provides a Driver Station menu to run individual Pedro Pathing tuning routines.
+ *   Select the desired test from the menu, run it, and update the measured values
+ *   in pedroPathing/Constants.java.
+ *
+ * TUNING ORDER (run these in sequence when setting up a new robot or after hardware
+ * changes to the drivetrain or odometry):
+ *   1. Localization Test      — verify encoder directions (same as LocalizerTest)
+ *   2. Forward Zero Power     — measure coast-to-stop deceleration going forward
+ *   3. Lateral Zero Power     — measure coast-to-stop deceleration going sideways
+ *   4. Forward Velocity       — calibrate max forward velocity
+ *   5. Lateral Velocity       — calibrate max lateral velocity
+ *   6. Translational PIDF     — tune the drive-to-point controller
+ *   7. Heading PIDF           — tune the rotation controller
+ *   8. Drive PIDF             — tune the path-following velocity controller
+ *   9. Centripetal Correction — tune curve overshoot correction
+ * =====================================================================================
+ */
+
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.changes;
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.drawCurrent;
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.drawCurrentAndHistory;

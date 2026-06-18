@@ -1,5 +1,27 @@
 package org.firstinspires.ftc.teamcode;
 
+/* =====================================================================================
+ * DriveToAprilTag11
+ * -------------------------------------------------------------------------------------
+ * WHAT THIS OP MODE DOES:
+ *   A standalone LinearOpMode that finds AprilTag 11 and drives up to it using raw
+ *   motor control (no Pedro Pathing). It runs three sequential phases:
+ *     1. Search  — spins slowly until the tag appears (3-second timeout).
+ *     2. Align   — turns in place until tx (horizontal offset) is within ±2°.
+ *     3. Approach — drives straight until the tag's target area reaches 38%.
+ *   Stops and exits once arrived (or if the tag is never found).
+ *
+ * WHAT IT'S FOR:
+ *   A simple, self-contained AprilTag approach routine that does not rely on Pedro
+ *   Pathing. Useful as a reference or a fallback when the Pedro follower isn't needed.
+ *   For the combined vision + triangle path, see SampleAutoTriangleAprilTag.
+ *
+ * HARDWARE REQUIRED (names must match the Driver Hub robot config):
+ *   - "front_left_motor", "front_right_motor", "back_left_motor", "back_right_motor"
+ *   - "limelight" (Limelight 3A camera, AprilTag pipeline 0)
+ * =====================================================================================
+ */
+
 import com.bylazar.telemetry.PanelsTelemetry;
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.LLResultTypes;

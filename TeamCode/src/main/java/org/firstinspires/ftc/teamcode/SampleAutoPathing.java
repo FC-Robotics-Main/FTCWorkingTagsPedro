@@ -1,5 +1,32 @@
 package org.firstinspires.ftc.teamcode;
 
+/* =====================================================================================
+ * SampleAutoPathing
+ * -------------------------------------------------------------------------------------
+ * WHAT THIS OP MODE DOES:
+ *   The original combined autonomous: optionally searches for AprilTag 11 using the
+ *   Limelight 3A camera, then runs the five-leg triangle path
+ *   (start -> top -> left -> right -> top -> start) and stops cleanly.
+ *   Feature switches at the top of the class (RUN_PATHS, RUN_APRILTAG) let you
+ *   enable or disable each phase without deleting code.
+ *
+ * WHAT IT'S FOR:
+ *   The "master" autonomous combining Limelight vision with Pedro Pathing paths.
+ *   For isolated testing use SampleAutoPathingFiveLegs (paths only) or
+ *   SampleAutoTriangleAprilTag (improved combined version with bug fixes).
+ *
+ * FEATURE FLAGS (set these at the top of the class):
+ *   RUN_APRILTAG = false — skips the vision phase entirely (currently disabled
+ *                          due to a null-check ordering bug in aprilTagUpdate()).
+ *   RUN_PATHS    = true  — runs the five-leg triangle after the vision phase.
+ *
+ * HARDWARE REQUIRED (names must match the Driver Hub robot config):
+ *   - "front_left_motor", "front_right_motor", "back_left_motor", "back_right_motor"
+ *   - "pinpoint"  (goBILDA Pinpoint odometry computer)
+ *   - "limelight" (Limelight 3A camera, AprilTag pipeline 0)
+ * =====================================================================================
+ */
+
 import android.util.Log;
 
 import com.bylazar.telemetry.PanelsTelemetry;

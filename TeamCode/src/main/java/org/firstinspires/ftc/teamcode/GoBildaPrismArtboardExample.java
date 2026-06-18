@@ -22,6 +22,21 @@
 
 package org.firstinspires.ftc.teamcode;
 
+/* =====================================================================================
+ * GoBildaPrismArtboardExample  (goBILDA vendor example — do not modify for competition)
+ * -------------------------------------------------------------------------------------
+ * WHAT THIS OP MODE DOES:
+ *   Shows how to recall Artboards that were previously saved to the Prism device.
+ *   Buttons A/B/Y/X load Artboards 0–3. D-Pad Right enables the boot animation
+ *   (Artboard 0 auto-plays on power-up); D-Pad Left disables it.
+ *
+ * WHAT IT'S FOR:
+ *   Template for how to switch LED patterns during a match. Copy the
+ *   prism.loadAnimationsFromArtboard(...) calls into your TeleOp or Autonomous
+ *   to change the LED display at specific moments (e.g., intake active, scoring).
+ *   Create and save Artboards first using GoBildaPrismConfigurator.
+ * =====================================================================================
+ */
 
 import static org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver.Artboard;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;

@@ -1,5 +1,30 @@
 package org.firstinspires.ftc.teamcode.pedroPathing;
 
+/* =====================================================================================
+ * Constants
+ * -------------------------------------------------------------------------------------
+ * WHAT THIS CLASS DOES:
+ *   Central configuration file for the Pedro Pathing follower. All tuning values
+ *   live here as static fields so they can be changed in one place and picked up
+ *   everywhere. Also provides the createFollower() factory used by every autonomous.
+ *
+ * KEY VALUES (change here, nowhere else):
+ *   followerConstants — mass, zero-power deceleration, PIDF gains for translation,
+ *                       heading, and drive.
+ *   driveConstants    — motor hardware names, directions, and calibrated max velocities.
+ *   localizerConstants — Pinpoint pod offsets (mm from robot center), encoder
+ *                        directions, and hardware map name.
+ *   pathConstraints   — global speed limits passed to every PathChain.
+ *
+ * AFTER MOVING HARDWARE:
+ *   - If you remount the odometry pods, re-measure and update forwardPodY / strafePodX
+ *     (distance in mm from the robot center to each pod).
+ *   - If the robot goes in the wrong direction, flip forwardEncoderDirection or
+ *     strafeEncoderDirection here (or swap the physical pod cables on the Pinpoint).
+ *   - Run LocalizerTest to verify: push forward->X up, push left->Y up, rotate CCW->heading up.
+ * =====================================================================================
+ */
+
 import com.pedropathing.control.FilteredPIDFCoefficients;
 import com.pedropathing.control.PIDFCoefficients;
 import com.pedropathing.follower.Follower;

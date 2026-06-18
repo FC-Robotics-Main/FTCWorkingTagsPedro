@@ -1,5 +1,24 @@
 package org.firstinspires.ftc.teamcode;
 
+/* =====================================================================================
+ * Intake2WheelsTeleop
+ * -------------------------------------------------------------------------------------
+ * WHAT THIS OP MODE DOES:
+ *   Driver-controlled mecanum drive plus an intake motor. Controls:
+ *     Left stick  — forward / backward / strafe
+ *     Right stick — rotate
+ *     Y button    — toggle intake direction (normal vs. reverse)
+ *     Right trigger — run intake forward at trigger pressure
+ *     Left trigger  — run intake backward at trigger pressure
+ *
+ * HARDWARE REQUIRED (names must match the Driver Hub robot config):
+ *   Control Hub:
+ *     - "front_left_motor", "front_right_motor", "back_left_motor", "back_right_motor"
+ *   Expansion Hub:
+ *     - "intake" (motor port 0) — the two-wheel intake
+ * =====================================================================================
+ */
+
 import com.bylazar.telemetry.PanelsTelemetry;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;

@@ -22,6 +22,25 @@
 
 package org.firstinspires.ftc.teamcode;
 
+/* =====================================================================================
+ * GoBildaPrismConfigurator  (goBILDA vendor tool — do not modify for competition use)
+ * -------------------------------------------------------------------------------------
+ * WHAT THIS OP MODE DOES:
+ *   An interactive Driver Station UI for building LED animations and saving them as
+ *   Artboards on the Prism device. Walk through the menu with the gamepad to:
+ *     1. Pick a layer (0–9)
+ *     2. Set the LED start/end points
+ *     3. Choose and customize an animation (Solid, Blink, Rainbow, etc.)
+ *     4. Set brightness and speed
+ *     5. Save to one of 8 Artboard slots
+ *
+ * WHAT IT'S FOR:
+ *   Run this once to design and store your LED patterns. Once saved, Artboards
+ *   persist on the Prism hardware and can be recalled instantly during a match
+ *   via GoBildaPrismArtboardExample (one short I²C write, no re-configuration).
+ * =====================================================================================
+ */
+
 import static org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver.LayerHeight;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;

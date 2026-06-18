@@ -22,6 +22,9 @@
 
 package org.firstinspires.ftc.teamcode.Prism;
 
+/* Color — RGB color value holder used by PrismAnimations. Each channel is clamped
+ * to [0, 255]. Pre-defined color constants (RED, BLUE, GREEN, etc.) are provided
+ * as static finals. Part of the goBILDA Prism vendor library. */
 public class Color {
     public int red;
     public int green;

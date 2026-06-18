@@ -22,6 +22,20 @@
 
 package org.firstinspires.ftc.teamcode.Prism;
 
+/* =====================================================================================
+ * GoBildaPrismDriver  (goBILDA vendor library — do not modify)
+ * -------------------------------------------------------------------------------------
+ * I2C driver for the goBILDA Prism RGB LED Controller. Registered as an I2C device
+ * type so it can be added to the Driver Hub robot config under the name "prism".
+ * Exposes the Prism's Animations/Layers/Artboards model:
+ *   - Animations: configurable LED effects (Solid, Blink, Rainbow, etc.)
+ *   - Layers (0–9): stack of animations; higher layers cover lower ones
+ *   - Artboards (0–7): saved layer snapshots that can be recalled with one I2C write
+ * Use GoBildaPrismConfigurator to set up Artboards, then recall them with
+ * prism.loadAnimationsFromArtboard() in your OpMode.
+ * =====================================================================================
+ */
+
 import static com.qualcomm.robotcore.util.TypeConversion.byteArrayToInt;
 import static com.qualcomm.robotcore.util.TypeConversion.unsignedByteToInt;
 

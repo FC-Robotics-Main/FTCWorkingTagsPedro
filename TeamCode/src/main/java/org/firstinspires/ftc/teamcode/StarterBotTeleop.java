@@ -1,5 +1,27 @@
 package org.firstinspires.ftc.teamcode;
 
+/* =====================================================================================
+ * StarterBotTeleop
+ * -------------------------------------------------------------------------------------
+ * WHAT THIS OP MODE DOES:
+ *   Basic mecanum-drive TeleOp. Controls:
+ *     Left stick Y  — forward / backward
+ *     Left stick X  — strafe left / right
+ *     Right stick X — rotate
+ *     Right bumper  — hold for half-speed precision mode
+ *
+ * WARNING — DIFFERENT MOTOR NAMES:
+ *   This file uses "left_motor_back", "left_motor_front", "right_motor_back",
+ *   "right_motor_front" — NOT the same names as the rest of the team's code
+ *   ("front_left_motor" etc.). If your Driver Hub config uses the other names,
+ *   this OpMode will crash on init. Either rename the motors in the config or
+ *   update the hardwareMap.get() calls below to match.
+ *
+ * HARDWARE REQUIRED (names must match the Driver Hub robot config):
+ *   - "left_motor_back", "left_motor_front", "right_motor_back", "right_motor_front"
+ * =====================================================================================
+ */
+
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;

@@ -1,5 +1,24 @@
 package org.firstinspires.ftc.teamcode;
 
+/* =====================================================================================
+ * TelemetryLog
+ * -------------------------------------------------------------------------------------
+ * WHAT THIS CLASS DOES:
+ *   A wrapper around TelemetryManager that adds two things:
+ *     1. In-match history panel — keeps a rolling list of the last 25 log entries
+ *        and displays them on the Driver Station via PanelsTelemetry every update.
+ *     2. CSV file logging — saves a complete timestamped run log to
+ *        /sdcard/FIRST/logs/<opModeName>_<timestamp>.csv when save() is called.
+ *
+ * HOW TO USE:
+ *   TelemetryLog log = new TelemetryLog(PanelsTelemetry.INSTANCE.getTelemetry(), "MyOp");
+ *   log.addData("Key", value);   // same as telemetry.addData()
+ *   log.debug("message");        // lightweight status message
+ *   log.update(telemetry);       // call instead of telemetry.update()
+ *   log.save();                  // call in stop() to write the CSV
+ * =====================================================================================
+ */
+
 import com.bylazar.telemetry.TelemetryManager;
 import com.qualcomm.robotcore.util.ElapsedTime;
 

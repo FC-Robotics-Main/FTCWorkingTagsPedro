@@ -22,6 +22,9 @@
 
 package org.firstinspires.ftc.teamcode.Prism;
 
+/* Direction — simple enum used by PrismAnimations to specify which way an
+ * animation travels along the LED strip (Forward = away from the Prism body,
+ * Backward = toward it). Part of the goBILDA Prism vendor library. */
 public enum Direction {
     Forward,
     Backward
