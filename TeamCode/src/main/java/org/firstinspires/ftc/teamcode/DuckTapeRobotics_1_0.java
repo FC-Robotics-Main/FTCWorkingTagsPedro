@@ -1,0 +1,587 @@
+package org.firstinspires.ftc.teamcode;
+
+import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.Gamepad;
+import com.qualcomm.robotcore.hardware.IMU;
+import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.VoltageSensor;
+import com.qualcomm.robotcore.util.ElapsedTime;
+import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
+import com.qualcomm.hardware.lynx.LynxModule;
+import java.util.List;
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+
+/*
+ * Mecanum drive + 2 velocity-controlled shooters + 2-motor intake + 3 servos, all mechanisms on toggles.
+ *
+ * GAMEPAD 1 — DRIVER (driving + intake)
+ *   Left stick   : drive. Robot-centric or field-centric, set by FIELD_CENTRIC below
+ *   Right stick X: turn
+ *   Start        : reset heading (point robot away from driver, then press)
+ *   X            : toggle SNAP-TO-ANGLE (auto-turns to SNAP_HEADING_DEG and holds it
+ *                  while you strafe; moving the right stick cancels it)
+ *   A            : toggle intake ON/OFF
+ *   B            : toggle intake REVERSE (spit out) ON/OFF
+ *   Left bumper  : hold for slow drive (precision)
+ *   D-pad left   : robot pulls right? tap to slow the left side
+ *   D-pad right  : robot pulls left?  tap to slow the right side
+ *
+ * GAMEPAD 2 — OPERATOR (shooters + servos)
+ *   Y            : toggle BOTH shooters ON/OFF
+ *   D-pad up/down: shooter speed +100 / -100 RPM per tap
+ *   Right bumper : SERVO1 opens, waits SERVO1_HOLD_SEC (0.65s), then returns home
+ *   Left bumper  : SERVO2 goes to 90 degrees, waits SERVO2_HOLD_SEC, then returns home
+ *   A            : SERVO3 goes up 45 degrees, waits SERVO3_HOLD_SEC (0.75s), then returns home
+ *   Rumble/LED   : flywheel "ready to fire" feedback
+ *
+ * HARDWARE CONFIG NAMES (must match the Driver Station config exactly)
+ *   FLM (front left motor), FRM (front right motor),
+ *   BLM (back left motor),  BRM (back right motor),
+ *   SLM (shooter left motor), SRM (shooter right motor),
+ *   ILM (intake left motor),  IRM (intake right motor)
+ *   servo1, servo2, servo3 (servo ports, configured as "Servo")
+ *   imu (the Control Hub's built-in IMU, I2C bus 0; usually already in the config)
+ *
+ * SHOOTER MOTORS MUST HAVE ENCODER CABLES PLUGGED IN.
+ * Without them, velocity mode will run the motor at full power or not at all.
+ */
+@TeleOp(name = "DuckTapeRobotics-1.0", group = "TeleOp")
+public class DuckTapeRobotics_1_0 extends LinearOpMode {
+
+    // ---- Shooter motor setup ----
+    // Encoder ticks per revolution of the motor OUTPUT shaft. Common values:
+    //   goBILDA 5203 6000 RPM (1:1)    : 28
+    //   goBILDA 5203 1620 RPM (3.7:1)  : 103.8
+    //   REV HD Hex bare (no gearbox)   : 28
+    //   REV Core Hex                   : 288
+    private static final double SHOOTER_TICKS_PER_REV = 28;
+    private static final double SHOOTER_MAX_RPM       = 6000;  // free speed of the motor
+
+    // ---- Shooter PIDF (from the Shooter PIDF Tuner OpMode) ----
+    // false = use the SDK's built-in defaults. Set true after tuning.
+    private static final boolean USE_CUSTOM_PIDF = false;
+    private static final double SHOOTER_P = 1.8408;
+    private static final double SHOOTER_I = 0.1841;
+    private static final double SHOOTER_D = 0.0;
+    private static final double SHOOTER_F_LEFT  = 14.0030;   // each shooter has its own F
+    private static final double SHOOTER_F_RIGHT = 18.4084;
+
+    // Shooter speed (gamepad2 D-pad up = +RPM_STEP, down = -RPM_STEP).
+    private static final double START_RPM       = 2400;  // speed at the start of the match
+    private static final double RPM_STEP        = 100;   // change per D-pad tap
+    private static final double MIN_RPM         = 1000;  // D-pad down stops here
+    private static final double READY_TOLERANCE = 50;    // "ready to fire" if within this many RPM
+
+    // ---- Other tunables ----
+    private static final double INTAKE_POWER = 1.0;
+    private static final double SLOW_MODE    = 0.4;
+
+    // ---- Servo1 (Right bumper) ----
+    // setPosition() takes 0.0-1.0, which covers the servo's FULL travel.
+    // SERVO_RANGE_DEG must match your servo or "90 degrees" will be wrong:
+    //   Most standard hobby servos       : 180
+    //   REV Smart Servo (default mode)   : 270
+    //   goBILDA 2000-series (dual mode)  : 300
+    // If it moves the wrong way, set SERVO1_REVERSED = true.
+    private static final double  SERVO_RANGE_DEG   = 180;
+    private static final double  SERVO1_HOME_DEG   = 0;    // where it rests at start
+    private static final double  SERVO1_TARGET_DEG = 125;  // where the button sends it (raise/lower to adjust how far it goes)
+    private static final boolean SERVO1_REVERSED   = true;
+    private static final double  SERVO1_HOLD_SEC   = 0.65;  // how long it stays open before returning
+
+    // ---- Servo2 (gamepad2 Left bumper) ----
+    // Same idea as servo1, with its own settings. Uses the same SERVO_RANGE_DEG,
+    // so if servo2 is a different model, give it its own range.
+    private static final double  SERVO2_HOME_DEG   = 20;   // kept off 0 so the servo isn't jammed at its end stop
+    private static final double  SERVO2_TARGET_DEG = 110;  // still a 90-degree swing
+    private static final boolean SERVO2_REVERSED   = false; // set true if it moves the wrong way
+    private static final double  SERVO2_HOLD_SEC   = 0.75;
+
+    // ---- Servo3 (gamepad2 A) ----
+    // Goes UP (home + 45 degrees) when A is pressed, returns home after SERVO3_HOLD_SEC.
+    // Uses the same SERVO_RANGE_DEG as the others.
+    // If it goes DOWN instead of up, set SERVO3_REVERSED = true.
+    // If it hits its end stop at home, raise SERVO3_HOME_DEG (e.g. 10); the 45-degree swing stays the same.
+    private static final double  SERVO3_HOME_DEG   = 0;
+    private static final double  SERVO3_SWING_DEG  = 45;   // how far UP goes from home
+    private static final double  SERVO3_UP_DEG     = SERVO3_HOME_DEG + SERVO3_SWING_DEG;
+    private static final boolean SERVO3_REVERSED   = false;
+    private static final double  SERVO3_HOLD_SEC   = 0.75;  // how long it stays up before returning
+
+    // ---- Stick feel ----
+    private static final double STICK_DEADZONE = 0.05;  // ignore tiny stick drift
+    private static final double STICK_CURVE    = 2.0;   // 1 = linear, 2 = squared (finer low-speed control)
+
+    // ---- Drive mode ----
+    // false = ROBOT-CENTRIC (stick forward = robot's front). Use this while testing.
+    // true  = FIELD-CENTRIC (stick forward = away from driver). Needs HUB_LOGO/HUB_USB set correctly.
+    private static final boolean FIELD_CENTRIC = false;
+
+    // ---- Heading hold (fixes curving) ----
+    // When you drive without touching the turn stick, the IMU keeps the robot
+    // pointed the same way, correcting for a weak/strong wheel or uneven drag.
+    private static final boolean HEADING_HOLD   = false;
+    private static final double  HOLD_KP        = 1.5;   // raise if it still curves, lower if it wiggles
+    private static final double  HOLD_MAX_POWER = 0.3;   // cap so correction never overpowers the driver
+
+    // ---- Drive balance (D-pad LEFT / RIGHT during TeleOp) ----
+    // Robot pulls RIGHT  -> tap D-pad LEFT  (slows the left side)
+    // Robot pulls LEFT   -> tap D-pad RIGHT (slows the right side)
+    // Each tap = 0.05. Telemetry shows the value; put it here to make it permanent.
+    private static final double DRIVE_BALANCE_START = 0.0;
+    private static final double DRIVE_BALANCE_STEP  = 0.05;
+    private static final double DRIVE_BALANCE_MAX   = 0.5;
+
+    // ---- Per-wheel trim ----
+    // Multiplies each wheel's power. 1.0 = normal. If one motor is faster
+    // (e.g. a different gearbox), lower its trim, e.g. TRIM_BL = 0.85.
+    private static final double TRIM_FL = 1.0;
+    private static final double TRIM_FR = 1.0;
+    private static final double TRIM_BL = 1.0;
+    private static final double TRIM_BR = 1.0;
+
+    // ---- Snap-to-angle (press X) ----
+    // Heading the robot turns to, in degrees. 0 = facing away from the driver
+    // (the direction it faced at init / last Start press). Positive = turned LEFT.
+    // Set this to whatever angle points your shooter at the goal.
+    private static final double SNAP_HEADING_DEG   = 0;
+    private static final double SNAP_KP            = 1.2;   // turn strength; raise if sluggish, lower if it wobbles
+    private static final double SNAP_MAX_POWER     = 0.7;   // fastest it will spin while snapping
+    private static final double SNAP_MIN_POWER     = 0.06;  // overcomes friction near the target
+    private static final double SNAP_TOLERANCE_DEG = 1.5;   // "close enough" window
+
+    // ---- Control Hub mounting (MUST match how the hub sits on YOUR robot) ----
+    // LOGO = which way the REV logo on the hub faces.
+    // USB  = which way the USB ports face.
+    // Options: UP, DOWN, LEFT, RIGHT, FORWARD, BACKWARD
+    private static final RevHubOrientationOnRobot.LogoFacingDirection HUB_LOGO =
+            RevHubOrientationOnRobot.LogoFacingDirection.UP;
+    private static final RevHubOrientationOnRobot.UsbFacingDirection HUB_USB =
+            RevHubOrientationOnRobot.UsbFacingDirection.FORWARD;
+
+    // ---- Hardware ----
+    private DcMotor frontLeft, frontRight, backLeft, backRight, intakeLeft, intakeRight;
+    private DcMotorEx shooterLeft, shooterRight;
+    private Servo servo1, servo2, servo3;
+    private IMU imu;
+    private List<LynxModule> hubs;
+
+    // ---- State ----
+    private double targetRpm = START_RPM;  // current shooter target
+    private boolean intakeOn = false;
+    private boolean intakeReverse = false;
+    private boolean shootersOn = false;
+    private boolean servo1Out = false;  // false = home, true = at SERVO1_TARGET_DEG
+    private final ElapsedTime servo1Timer = new ElapsedTime();  // time since servo1 was sent out
+    private boolean servo3Up = false;   // false = home, true = up 45 degrees
+    private final ElapsedTime servo3Timer = new ElapsedTime();
+    private boolean servo2Out = false;
+    private final ElapsedTime servo2Timer = new ElapsedTime();
+    private boolean wasReady = false;   // used to rumble once when flywheels reach speed
+
+    // Previous button states (for detecting a single press)
+    private boolean lastA, lastB, lastY, lastUp, lastDown, lastX, lastRB, lastLB, lastA2;
+
+    private boolean snapping = false;      // heading lock active
+    private boolean snapOnTarget = false;  // within tolerance of snap heading
+    private boolean holding = false;       // heading hold active
+    private double  holdHeading = 0;       // heading (radians) being held
+
+    // Live drive balance (D-pad left/right). Starts at DRIVE_BALANCE_START.
+    // Once you find a value that drives straight, copy it into DRIVE_BALANCE_START.
+    private double driveBalance = DRIVE_BALANCE_START;
+    private boolean lastLeft, lastRight;
+
+    @Override
+    public void runOpMode() {
+        frontLeft    = hardwareMap.get(DcMotor.class, "FLM");
+        frontRight   = hardwareMap.get(DcMotor.class, "FRM");
+        backLeft     = hardwareMap.get(DcMotor.class, "BLM");
+        backRight    = hardwareMap.get(DcMotor.class, "BRM");
+        intakeLeft   = hardwareMap.get(DcMotor.class, "ILM");
+        intakeRight  = hardwareMap.get(DcMotor.class, "IRM");
+        shooterLeft  = hardwareMap.get(DcMotorEx.class, "SLM");
+        shooterRight = hardwareMap.get(DcMotorEx.class, "SRM");
+        servo1       = hardwareMap.get(Servo.class, "servo1");
+        servo2       = hardwareMap.get(Servo.class, "servo2");
+        servo3       = hardwareMap.get(Servo.class, "servo3");
+
+        // Bulk reads: read ALL motor data from each hub in one call per loop
+        // instead of one call per motor. Makes the loop much faster.
+        hubs = hardwareMap.getAll(LynxModule.class);
+        for (LynxModule hub : hubs) {
+            hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL);
+        }
+
+        imu = hardwareMap.get(IMU.class, "imu");
+        imu.initialize(new IMU.Parameters(new RevHubOrientationOnRobot(HUB_LOGO, HUB_USB)));
+        imu.resetYaw();   // robot's heading at init = "forward"
+
+        // Left side reversed so "positive" drives forward on all wheels.
+        frontLeft.setDirection(DcMotorSimple.Direction.REVERSE);
+        backLeft.setDirection(DcMotorSimple.Direction.REVERSE);
+        frontRight.setDirection(DcMotorSimple.Direction.FORWARD);
+        backRight.setDirection(DcMotorSimple.Direction.FORWARD);
+
+        // Shooters usually face each other, so one spins the opposite way.
+        shooterLeft.setDirection(DcMotorSimple.Direction.FORWARD);
+        shooterRight.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        // Intake motors usually face each other too, so one is reversed.
+        // If the intake pushes pieces out when it should pull in, flip BOTH.
+        // If the two sides fight each other, flip ONE.
+        intakeLeft.setDirection(DcMotorSimple.Direction.FORWARD);
+        intakeRight.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        // Servos: direction, then move to home so they start in a known spot.
+        // NOTE: the servos will move to home as soon as INIT is pressed.
+        servo1.setDirection(SERVO1_REVERSED ? Servo.Direction.REVERSE : Servo.Direction.FORWARD);
+        servo1.setPosition(degToServoPos(SERVO1_HOME_DEG));
+        servo2.setDirection(SERVO2_REVERSED ? Servo.Direction.REVERSE : Servo.Direction.FORWARD);
+        servo2.setPosition(degToServoPos(SERVO2_HOME_DEG));
+        servo3.setDirection(SERVO3_REVERSED ? Servo.Direction.REVERSE : Servo.Direction.FORWARD);
+        servo3.setPosition(degToServoPos(SERVO3_HOME_DEG));
+
+        for (DcMotor m : new DcMotor[]{frontLeft, frontRight, backLeft, backRight, intakeLeft, intakeRight}) {
+            m.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        }
+
+        // Velocity control: the hub's built-in PID holds the target speed
+        // even as the battery drops or a game piece loads the flywheel.
+        for (DcMotorEx s : new DcMotorEx[]{shooterLeft, shooterRight}) {
+            s.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            s.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            s.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT); // coast down, easier on motors
+        }
+        if (USE_CUSTOM_PIDF) {
+            shooterLeft.setVelocityPIDFCoefficients(SHOOTER_P, SHOOTER_I, SHOOTER_D, SHOOTER_F_LEFT);
+            shooterRight.setVelocityPIDFCoefficients(SHOOTER_P, SHOOTER_I, SHOOTER_D, SHOOTER_F_RIGHT);
+        }
+
+        telemetry.addLine("GP1: drive, A=intake  B=reverse  X=snap  LB=slow  Start=reset heading");
+        telemetry.addLine("GP2: Y=shooters  Dpad up/down=RPM +/-100  RB=servo1  LB=servo2  A=servo3");
+        telemetry.addLine("Robot should face AWAY from driver at init.");
+        telemetry.update();
+
+        waitForStart();
+
+        while (opModeIsActive()) {
+            // MANUAL bulk caching: clear once at the top of every loop,
+            // or every encoder/velocity read will return stale data.
+            for (LynxModule hub : hubs) {
+                hub.clearBulkCache();
+            }
+
+            drive();
+            handleToggles();
+            runMechanisms();
+            readyFeedback();
+            updateTelemetry();
+        }
+
+        stopAll();
+    }
+
+    // ---------------- Field-centric mecanum drive ----------------
+    private void drive() {
+        double y  = shapeStick(-gamepad1.left_stick_y);
+        double x  = shapeStick( gamepad1.left_stick_x);
+        double rx = shapeStick( gamepad1.right_stick_x);
+
+        // Start button re-zeros heading. Point the robot away from the driver first.
+        if (gamepad1.start) {
+            imu.resetYaw();
+            holding = false;   // re-capture the hold heading after a reset
+        }
+
+        double heading = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS);
+
+        // Field-centric: rotate the stick direction by the opposite of the robot's heading,
+        // so "stick forward" always means "away from the driver".
+        // Robot-centric (FIELD_CENTRIC = false): stick forward = robot's front.
+        double driveAngle = FIELD_CENTRIC ? -heading : 0;
+        double rotX = x * Math.cos(driveAngle) - y * Math.sin(driveAngle);
+        double rotY = x * Math.sin(driveAngle) + y * Math.cos(driveAngle);
+
+        rotX *= 1.1;  // counters imperfect strafing
+
+        double scale = gamepad1.left_bumper ? SLOW_MODE : 1.0;
+        x = rotX * scale;
+        y = rotY * scale;
+
+        // ---- Snap-to-angle ----
+        // X toggles the heading lock ON/OFF. Touching the turn stick cancels it.
+        boolean xBtn = gamepad1.x;
+        if (xBtn && !lastX) {
+            snapping = !snapping;
+        }
+        lastX = xBtn;
+        if (Math.abs(rx) > 0) {
+            snapping = false;   // driver took over turning
+        }
+
+        boolean translating = Math.abs(x) + Math.abs(y) > 0;
+
+        if (snapping) {
+            rx = snapTurnPower(heading);   // full strength, not reduced by slow mode
+            holding = false;
+        } else if (Math.abs(rx) > 0) {
+            rx *= scale;                   // driver is turning: no correction
+            holding = false;
+        } else if (HEADING_HOLD && translating) {
+            // Driver isn't turning: lock the current heading and correct any drift/curve.
+            if (!holding) {
+                holdHeading = heading;
+                holding = true;
+            }
+            rx = holdTurnPower(heading);
+        } else {
+            rx = 0;
+            holding = false;               // robot is sitting still
+        }
+
+        double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(rx), 1);
+
+        // Drive balance: positive slows the LEFT side, negative slows the RIGHT side.
+        double leftScale  = 1.0 - Math.max(0,  driveBalance);
+        double rightScale = 1.0 - Math.max(0, -driveBalance);
+
+        frontLeft.setPower ((y + x + rx) / denominator * TRIM_FL * leftScale);
+        backLeft.setPower  ((y - x + rx) / denominator * TRIM_BL * leftScale);
+        frontRight.setPower((y - x - rx) / denominator * TRIM_FR * rightScale);
+        backRight.setPower ((y + x - rx) / denominator * TRIM_BR * rightScale);
+    }
+
+    // Small proportional correction back to holdHeading while driving straight.
+    private double holdTurnPower(double headingRad) {
+        double error = AngleUnit.normalizeRadians(holdHeading - headingRad);
+        double power = -HOLD_KP * error;   // same sign convention as snap
+        return Math.max(-HOLD_MAX_POWER, Math.min(HOLD_MAX_POWER, power));
+    }
+
+    // Proportional turn toward SNAP_HEADING_DEG. Returns a turn power for rx.
+    private double snapTurnPower(double headingRad) {
+        double error = AngleUnit.normalizeRadians(Math.toRadians(SNAP_HEADING_DEG) - headingRad);
+        snapOnTarget = Math.abs(Math.toDegrees(error)) < SNAP_TOLERANCE_DEG;
+        if (snapOnTarget) return 0;
+
+        // IMU yaw is positive counter-clockwise; positive rx turns clockwise, hence the minus.
+        double power = -SNAP_KP * error;
+        power = Math.max(-SNAP_MAX_POWER, Math.min(SNAP_MAX_POWER, power));
+
+        // Minimum power so the robot doesn't stall a few degrees short.
+        if (Math.abs(power) < SNAP_MIN_POWER) {
+            power = Math.signum(power) * SNAP_MIN_POWER;
+        }
+        return power;
+    }
+
+    // ---------------- Toggles (flip only on the press, not while held) ----------------
+    private void handleToggles() {
+        // Gamepad 1 (driver): intake
+        boolean a = gamepad1.a, b = gamepad1.b;
+        // Gamepad 2 (operator): shooters + servos
+        boolean yBtn = gamepad2.y;
+        boolean up = gamepad2.dpad_up, down = gamepad2.dpad_down;
+        boolean rb = gamepad2.right_bumper;
+        boolean lb = gamepad2.left_bumper;
+        boolean a2 = gamepad2.a;
+
+        if (a && !lastA) {
+            intakeOn = !intakeOn;
+            if (intakeOn) intakeReverse = false;
+        }
+        if (b && !lastB) {
+            intakeReverse = !intakeReverse;
+            if (intakeReverse) intakeOn = false;
+        }
+        if (yBtn && !lastY) {
+            shootersOn = !shootersOn;
+        }
+        // Each servo: one press starts its cycle. Presses during the cycle are ignored.
+        if (rb && !lastRB && !servo1Out) {
+            servo1Out = true;
+            servo1Timer.reset();
+        }
+        if (a2 && !lastA2 && !servo3Up) {
+            servo3Up = true;
+            servo3Timer.reset();
+        }
+        if (lb && !lastLB && !servo2Out) {
+            servo2Out = true;
+            servo2Timer.reset();
+        }
+        // Shooter speed: up = +RPM_STEP, down = -RPM_STEP. Stops at MIN_RPM / SHOOTER_MAX_RPM.
+        if (up && !lastUp) {
+            targetRpm = Math.min(targetRpm + RPM_STEP, SHOOTER_MAX_RPM);
+        }
+        if (down && !lastDown) {
+            targetRpm = Math.max(targetRpm - RPM_STEP, MIN_RPM);
+        }
+
+        boolean left = gamepad1.dpad_left, right = gamepad1.dpad_right;
+        if (left && !lastLeft) {
+            driveBalance = Math.min(driveBalance + DRIVE_BALANCE_STEP, DRIVE_BALANCE_MAX);
+        }
+        if (right && !lastRight) {
+            driveBalance = Math.max(driveBalance - DRIVE_BALANCE_STEP, -DRIVE_BALANCE_MAX);
+        }
+        lastLeft = left; lastRight = right;
+
+        lastA = a; lastB = b; lastY = yBtn; lastUp = up; lastDown = down; lastRB = rb; lastLB = lb; lastA2 = a2;
+    }
+
+    // ---------------- Apply mechanism outputs ----------------
+    private void runMechanisms() {
+        double intakePower = intakeOn ? INTAKE_POWER : intakeReverse ? -INTAKE_POWER : 0;
+        intakeLeft.setPower(intakePower);
+        intakeRight.setPower(intakePower);
+
+        // Auto-return: timer-based, so driving and shooters keep working during the wait.
+        if (servo1Out && servo1Timer.seconds() >= SERVO1_HOLD_SEC) {
+            servo1Out = false;
+        }
+        servo1.setPosition(degToServoPos(servo1Out ? SERVO1_TARGET_DEG : SERVO1_HOME_DEG));
+
+        if (servo3Up && servo3Timer.seconds() >= SERVO3_HOLD_SEC) {
+            servo3Up = false;
+        }
+        servo3.setPosition(degToServoPos(servo3Up ? SERVO3_UP_DEG : SERVO3_HOME_DEG));
+
+        if (servo2Out && servo2Timer.seconds() >= SERVO2_HOLD_SEC) {
+            servo2Out = false;
+        }
+        servo2.setPosition(degToServoPos(servo2Out ? SERVO2_TARGET_DEG : SERVO2_HOME_DEG));
+
+        if (shootersOn) {
+            double ticksPerSec = rpmToTicksPerSec(targetRpm);
+            shooterLeft.setVelocity(ticksPerSec);
+            shooterRight.setVelocity(ticksPerSec);
+        } else {
+            // setPower(0) lets the flywheels coast instead of PID-braking to zero
+            shooterLeft.setPower(0);
+            shooterRight.setPower(0);
+        }
+    }
+
+    // ---------------- Helpers ----------------
+
+    // Converts degrees to the 0.0-1.0 servo position, clamped to the servo's range.
+    private double degToServoPos(double deg) {
+        return Math.max(0.0, Math.min(1.0, deg / SERVO_RANGE_DEG));
+    }
+
+    // Deadzone + curve: small stick movements = fine control, full stick = full speed.
+    // Rescales after the deadzone so there's no "jump" when you leave it.
+    private double shapeStick(double v) {
+        double mag = Math.abs(v);
+        if (mag < STICK_DEADZONE) return 0;
+        double scaled = (mag - STICK_DEADZONE) / (1 - STICK_DEADZONE);
+        return Math.signum(v) * Math.pow(scaled, STICK_CURVE);
+    }
+    private double rpmToTicksPerSec(double rpm) {
+        return rpm * SHOOTER_TICKS_PER_REV / 60.0;
+    }
+
+    private double ticksPerSecToRpm(double tps) {
+        return tps * 60.0 / SHOOTER_TICKS_PER_REV;
+    }
+
+    private boolean shootersReady() {
+        if (!shootersOn) return false;
+        double l = Math.abs(ticksPerSecToRpm(shooterLeft.getVelocity()));
+        double r = Math.abs(ticksPerSecToRpm(shooterRight.getVelocity()));
+        return Math.abs(l - targetRpm) < READY_TOLERANCE
+                && Math.abs(r - targetRpm) < READY_TOLERANCE;
+    }
+
+    // ---------------- Driver feedback when flywheels hit target speed ----------------
+    // Rumble: one double-buzz the moment both shooters reach target RPM.
+    // LED (PS4/PS5 controllers only): RED = off, YELLOW = spinning up, GREEN = ready.
+    // Logitech F310 controllers have no rumble or LED; use telemetry instead.
+    private void readyFeedback() {
+        boolean ready = shootersReady();
+
+        if (ready && !wasReady) {
+            gamepad2.rumbleBlips(2);
+        }
+        wasReady = ready;
+
+        if (!shootersOn) {
+            gamepad2.setLedColor(1, 0, 0, Gamepad.LED_DURATION_CONTINUOUS);
+        } else if (ready) {
+            gamepad2.setLedColor(0, 1, 0, Gamepad.LED_DURATION_CONTINUOUS);
+        } else {
+            gamepad2.setLedColor(1, 1, 0, Gamepad.LED_DURATION_CONTINUOUS);
+        }
+    }
+
+    private long lastLoopNs = System.nanoTime();
+    private double minVolts = 99;
+
+    private double batteryVoltage() {
+        double v = Double.POSITIVE_INFINITY;
+        for (VoltageSensor s : hardwareMap.voltageSensor) {
+            double reading = s.getVoltage();
+            if (reading > 0) v = Math.min(v, reading);
+        }
+        return v == Double.POSITIVE_INFINITY ? 0 : v;
+    }
+
+    private void updateTelemetry() {
+        long now = System.nanoTime();
+        telemetry.addData("Loop time (ms)", "%.1f", (now - lastLoopNs) / 1e6);
+        lastLoopNs = now;
+        // ---- Battery (lowest hub reading; watch for sag while driving) ----
+        double volts = batteryVoltage();
+        if (volts > 0) minVolts = Math.min(minVolts, volts);
+        telemetry.addData("Battery", "%.2f V   (lowest this run: %.2f V)", volts, minVolts);
+
+        // ---- Drive diagnostics (remove once driving is sorted) ----
+        telemetry.addData("Stick LX / LY / RX", "%.2f / %.2f / %.2f",
+                gamepad1.left_stick_x, -gamepad1.left_stick_y, gamepad1.right_stick_x);
+        telemetry.addData("Power FL / FR", "%.2f / %.2f", frontLeft.getPower(), frontRight.getPower());
+        telemetry.addData("Power BL / BR", "%.2f / %.2f", backLeft.getPower(), backRight.getPower());
+
+        telemetry.addData("Heading (deg)", "%.1f",
+                imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES));
+        telemetry.addData("Drive balance", "%+.2f  (%s)", driveBalance,
+                driveBalance > 0 ? "left side slowed" : driveBalance < 0 ? "right side slowed" : "even");
+        telemetry.addData("Heading hold", holding
+                ? String.format("ON @ %.1f°", Math.toDegrees(holdHeading)) : "off");
+        telemetry.addData("Snap", !snapping ? "off"
+                : snapOnTarget ? "LOCKED @ " + SNAP_HEADING_DEG + "°"
+                : "turning to " + SNAP_HEADING_DEG + "°");
+        telemetry.addData("Intake", intakeOn ? "ON" : intakeReverse ? "REVERSE" : "OFF");
+        telemetry.addData("Servo1", "%s  (pos %.2f)",
+                servo1Out ? String.format("OUT, returning in %.1fs",
+                        Math.max(0, SERVO1_HOLD_SEC - servo1Timer.seconds())) : "HOME",
+                servo1.getPosition());
+        telemetry.addData("Servo2", "%s  (pos %.2f)",
+                servo2Out ? String.format("OUT, returning in %.1fs",
+                        Math.max(0, SERVO2_HOLD_SEC - servo2Timer.seconds())) : "HOME",
+                servo2.getPosition());
+        telemetry.addData("Servo3", "%s  (pos %.2f)",
+                servo3Up ? String.format("UP, returning in %.1fs",
+                        Math.max(0, SERVO3_HOLD_SEC - servo3Timer.seconds())) : "HOME",
+                servo3.getPosition());
+        telemetry.addData("Shooters", shootersOn ? "ON" : "OFF");
+        telemetry.addData("Target RPM", "%.0f  (D-pad up/down = +/-%.0f)", targetRpm, RPM_STEP);
+        telemetry.addData("Left RPM",  "%.0f", Math.abs(ticksPerSecToRpm(shooterLeft.getVelocity())));
+        telemetry.addData("Right RPM", "%.0f", Math.abs(ticksPerSecToRpm(shooterRight.getVelocity())));
+        telemetry.addData("READY TO FIRE", shootersReady() ? ">>> YES <<<" : "no");
+        telemetry.update();
+    }
+
+    private void stopAll() {
+        for (DcMotor m : new DcMotor[]{frontLeft, frontRight, backLeft, backRight, intakeLeft, intakeRight}) {
+            m.setPower(0);
+        }
+        shooterLeft.setPower(0);
+        shooterRight.setPower(0);
+    }
+}
