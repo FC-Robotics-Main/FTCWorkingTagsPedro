@@ -34,7 +34,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
  *   Y            : toggle BOTH shooters ON/OFF
  *   D-pad up/down: shooter speed +100 / -100 RPM per tap
  *   Right bumper : SERVO1 opens, waits SERVO1_HOLD_SEC (0.65s), then returns home
- *   Left bumper  : SERVO2 goes to 90 degrees, waits SERVO2_HOLD_SEC, then returns home
+ *   Left bumper  : SERVO2 goes to 90 degrees, waits SERVO2_HOLD_SEC (0.65s), then returns home
  *   A            : SERVO3 goes up 45 degrees, waits SERVO3_HOLD_SEC (0.75s), then returns home
  *   Rumble/LED   : flywheel "ready to fire" feedback
  *
@@ -99,7 +99,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private static final double  SERVO2_HOME_DEG   = 20;   // kept off 0 so the servo isn't jammed at its end stop
     private static final double  SERVO2_TARGET_DEG = 110;  // still a 90-degree swing
     private static final boolean SERVO2_REVERSED   = false; // set true if it moves the wrong way
-    private static final double  SERVO2_HOLD_SEC   = 0.75;
+    private static final double  SERVO2_HOLD_SEC   = 0.65;  // how long it stays out before returning
 
     // ---- Servo3 (gamepad2 A) ----
     // Goes UP (home + 45 degrees) when A is pressed, returns home after SERVO3_HOLD_SEC.
