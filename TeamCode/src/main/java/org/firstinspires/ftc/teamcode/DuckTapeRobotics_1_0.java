@@ -31,8 +31,10 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
  *   D-pad right  : robot pulls left?  tap to slow the right side
  *
  * GAMEPAD 2 — OPERATOR (shooters + servos)
- *   Y            : toggle BOTH shooters ON/OFF
- *   D-pad up/down: shooter speed +100 / -100 RPM per tap
+ *   D-pad left   : toggle LEFT shooter ON/OFF
+ *   D-pad right  : toggle RIGHT shooter ON/OFF
+ *   D-pad up/down: LEFT shooter speed  +100 / -100 RPM per tap
+ *   B / X        : RIGHT shooter speed +100 / -100 RPM per tap (B = up, X = down)
  *   Right bumper : SERVO1 opens, waits SERVO1_HOLD_SEC (0.65s), then returns home
  *   Left bumper  : SERVO2 goes to 90 degrees, waits SERVO2_HOLD_SEC (0.65s), then returns home
  *   A            : SERVO3 goes up 45 degrees, waits SERVO3_HOLD_SEC (0.75s), then returns home
@@ -70,8 +72,11 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private static final double SHOOTER_F_LEFT  = 14.0030;   // each shooter has its own F
     private static final double SHOOTER_F_RIGHT = 18.4084;
 
-    // Shooter speed (gamepad2 D-pad up = +RPM_STEP, down = -RPM_STEP).
-    private static final double START_RPM       = 2400;  // speed at the start of the match
+    // Shooter speed. Each shooter has its own target.
+    //   LEFT  shooter: gamepad2 D-pad up = +RPM_STEP, D-pad down = -RPM_STEP
+    //   RIGHT shooter: gamepad2 B        = +RPM_STEP, X          = -RPM_STEP
+    private static final double START_RPM_LEFT  = 2400;  // left shooter speed at the start of the match
+    private static final double START_RPM_RIGHT = 2400;  // right shooter speed at the start of the match
     private static final double RPM_STEP        = 100;   // change per D-pad tap
     private static final double MIN_RPM         = 1000;  // D-pad down stops here
     private static final double READY_TOLERANCE = 50;    // "ready to fire" if within this many RPM
@@ -171,10 +176,12 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private List<LynxModule> hubs;
 
     // ---- State ----
-    private double targetRpm = START_RPM;  // current shooter target
+    private double targetRpmLeft  = START_RPM_LEFT;   // current left shooter target
+    private double targetRpmRight = START_RPM_RIGHT;  // current right shooter target
     private boolean intakeOn = false;
     private boolean intakeReverse = false;
-    private boolean shootersOn = false;
+    private boolean shooterLeftOn  = false;
+    private boolean shooterRightOn = false;
     private boolean servo1Out = false;  // false = home, true = at SERVO1_TARGET_DEG
     private final ElapsedTime servo1Timer = new ElapsedTime();  // time since servo1 was sent out
     private boolean servo3Up = false;   // false = home, true = up 45 degrees
@@ -184,7 +191,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private boolean wasReady = false;   // used to rumble once when flywheels reach speed
 
     // Previous button states (for detecting a single press)
-    private boolean lastA, lastB, lastY, lastUp, lastDown, lastX, lastRB, lastLB, lastA2;
+    private boolean lastA, lastB, lastUp, lastDown, lastX, lastRB, lastLB, lastA2, lastB2, lastX2, lastLeft2, lastRight2;
 
     private boolean snapping = false;      // heading lock active
     private boolean snapOnTarget = false;  // within tolerance of snap heading
@@ -263,7 +270,9 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
 
         telemetry.addLine("GP1: drive, A=intake  B=reverse  X=snap  LB=slow  Start=reset heading");
-        telemetry.addLine("GP2: Y=shooters  Dpad up/down=RPM +/-100  RB=servo1  LB=servo2  A=servo3");
+        telemetry.addLine("GP2: Dpad left=LEFT shooter on/off  Dpad right=RIGHT shooter on/off");
+        telemetry.addLine("GP2: Dpad up/down=LEFT RPM +/-100  B/X=RIGHT RPM +/-100");
+        telemetry.addLine("GP2: RB=servo1  LB=servo2  A=servo3");
         telemetry.addLine("Robot should face AWAY from driver at init.");
         telemetry.update();
 
@@ -385,11 +394,13 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         // Gamepad 1 (driver): intake
         boolean a = gamepad1.a, b = gamepad1.b;
         // Gamepad 2 (operator): shooters + servos
-        boolean yBtn = gamepad2.y;
         boolean up = gamepad2.dpad_up, down = gamepad2.dpad_down;
         boolean rb = gamepad2.right_bumper;
         boolean lb = gamepad2.left_bumper;
         boolean a2 = gamepad2.a;
+        boolean b2 = gamepad2.b;
+        boolean x2 = gamepad2.x;
+        boolean left2 = gamepad2.dpad_left, right2 = gamepad2.dpad_right;
 
         if (a && !lastA) {
             intakeOn = !intakeOn;
@@ -399,8 +410,12 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
             intakeReverse = !intakeReverse;
             if (intakeReverse) intakeOn = false;
         }
-        if (yBtn && !lastY) {
-            shootersOn = !shootersOn;
+        // D-pad left / right: each shooter on its own.
+        if (left2 && !lastLeft2) {
+            shooterLeftOn = !shooterLeftOn;
+        }
+        if (right2 && !lastRight2) {
+            shooterRightOn = !shooterRightOn;
         }
         // Each servo: one press starts its cycle. Presses during the cycle are ignored.
         if (rb && !lastRB && !servo1Out) {
@@ -415,12 +430,20 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
             servo2Out = true;
             servo2Timer.reset();
         }
-        // Shooter speed: up = +RPM_STEP, down = -RPM_STEP. Stops at MIN_RPM / SHOOTER_MAX_RPM.
+        // LEFT shooter speed: D-pad up = +RPM_STEP, D-pad down = -RPM_STEP.
+        // Stops at MIN_RPM / SHOOTER_MAX_RPM.
         if (up && !lastUp) {
-            targetRpm = Math.min(targetRpm + RPM_STEP, SHOOTER_MAX_RPM);
+            targetRpmLeft = Math.min(targetRpmLeft + RPM_STEP, SHOOTER_MAX_RPM);
         }
         if (down && !lastDown) {
-            targetRpm = Math.max(targetRpm - RPM_STEP, MIN_RPM);
+            targetRpmLeft = Math.max(targetRpmLeft - RPM_STEP, MIN_RPM);
+        }
+        // RIGHT shooter speed: B = +RPM_STEP, X = -RPM_STEP.
+        if (b2 && !lastB2) {
+            targetRpmRight = Math.min(targetRpmRight + RPM_STEP, SHOOTER_MAX_RPM);
+        }
+        if (x2 && !lastX2) {
+            targetRpmRight = Math.max(targetRpmRight - RPM_STEP, MIN_RPM);
         }
 
         boolean left = gamepad1.dpad_left, right = gamepad1.dpad_right;
@@ -432,7 +455,8 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
         lastLeft = left; lastRight = right;
 
-        lastA = a; lastB = b; lastY = yBtn; lastUp = up; lastDown = down; lastRB = rb; lastLB = lb; lastA2 = a2;
+        lastA = a; lastB = b; lastUp = up; lastDown = down; lastRB = rb; lastLB = lb; lastA2 = a2;
+        lastB2 = b2; lastX2 = x2; lastLeft2 = left2; lastRight2 = right2;
     }
 
     // ---------------- Apply mechanism outputs ----------------
@@ -457,13 +481,16 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
         servo2.setPosition(degToServoPos(servo2Out ? SERVO2_TARGET_DEG : SERVO2_HOME_DEG));
 
-        if (shootersOn) {
-            double ticksPerSec = rpmToTicksPerSec(targetRpm);
-            shooterLeft.setVelocity(ticksPerSec);
-            shooterRight.setVelocity(ticksPerSec);
+        // Each shooter runs on its own. setPower(0) lets a flywheel coast
+        // instead of PID-braking to zero.
+        if (shooterLeftOn) {
+            shooterLeft.setVelocity(rpmToTicksPerSec(targetRpmLeft));
         } else {
-            // setPower(0) lets the flywheels coast instead of PID-braking to zero
             shooterLeft.setPower(0);
+        }
+        if (shooterRightOn) {
+            shooterRight.setVelocity(rpmToTicksPerSec(targetRpmRight));
+        } else {
             shooterRight.setPower(0);
         }
     }
@@ -492,15 +519,17 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     }
 
     private boolean shootersReady() {
-        if (!shootersOn) return false;
+        if (!shooterLeftOn && !shooterRightOn) return false;
         double l = Math.abs(ticksPerSecToRpm(shooterLeft.getVelocity()));
         double r = Math.abs(ticksPerSecToRpm(shooterRight.getVelocity()));
-        return Math.abs(l - targetRpm) < READY_TOLERANCE
-                && Math.abs(r - targetRpm) < READY_TOLERANCE;
+        // Ready when every shooter that is ON is at its target. Shooters that are OFF are ignored.
+        boolean leftOk  = !shooterLeftOn  || Math.abs(l - targetRpmLeft)  < READY_TOLERANCE;
+        boolean rightOk = !shooterRightOn || Math.abs(r - targetRpmRight) < READY_TOLERANCE;
+        return leftOk && rightOk;
     }
 
     // ---------------- Driver feedback when flywheels hit target speed ----------------
-    // Rumble: one double-buzz the moment both shooters reach target RPM.
+    // Rumble: one double-buzz the moment every running shooter reaches its target RPM.
     // LED (PS4/PS5 controllers only): RED = off, YELLOW = spinning up, GREEN = ready.
     // Logitech F310 controllers have no rumble or LED; use telemetry instead.
     private void readyFeedback() {
@@ -511,7 +540,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
         wasReady = ready;
 
-        if (!shootersOn) {
+        if (!shooterLeftOn && !shooterRightOn) {
             gamepad2.setLedColor(1, 0, 0, Gamepad.LED_DURATION_CONTINUOUS);
         } else if (ready) {
             gamepad2.setLedColor(0, 1, 0, Gamepad.LED_DURATION_CONTINUOUS);
@@ -569,10 +598,12 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
                 servo3Up ? String.format("UP, returning in %.1fs",
                         Math.max(0, SERVO3_HOLD_SEC - servo3Timer.seconds())) : "HOME",
                 servo3.getPosition());
-        telemetry.addData("Shooters", shootersOn ? "ON" : "OFF");
-        telemetry.addData("Target RPM", "%.0f  (D-pad up/down = +/-%.0f)", targetRpm, RPM_STEP);
-        telemetry.addData("Left RPM",  "%.0f", Math.abs(ticksPerSecToRpm(shooterLeft.getVelocity())));
-        telemetry.addData("Right RPM", "%.0f", Math.abs(ticksPerSecToRpm(shooterRight.getVelocity())));
+        telemetry.addData("Shooters", "LEFT %s  /  RIGHT %s",
+                shooterLeftOn ? "ON" : "OFF", shooterRightOn ? "ON" : "OFF");
+        telemetry.addData("Left RPM",  "%.0f / target %.0f  (D-pad up/down)",
+                Math.abs(ticksPerSecToRpm(shooterLeft.getVelocity())), targetRpmLeft);
+        telemetry.addData("Right RPM", "%.0f / target %.0f  (B up / X down)",
+                Math.abs(ticksPerSecToRpm(shooterRight.getVelocity())), targetRpmRight);
         telemetry.addData("READY TO FIRE", shootersReady() ? ">>> YES <<<" : "no");
         telemetry.update();
     }
