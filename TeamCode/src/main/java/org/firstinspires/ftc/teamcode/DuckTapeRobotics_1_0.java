@@ -7,31 +7,38 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.IMU;
+import com.qualcomm.robotcore.hardware.PwmControl;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.ServoImplEx;
 import com.qualcomm.robotcore.hardware.VoltageSensor;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.hardware.lynx.LynxModule;
 import java.util.List;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+import org.firstinspires.ftc.teamcode.Prism.Color;
+import org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver;
+import org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver.LayerHeight;
+import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
 
 /*
  * Mecanum drive + 2 velocity-controlled shooters + 2-motor intake + 4 servos, all mechanisms on toggles.
  *
- * GAMEPAD 1 — DRIVER (driving + intake)
+ * GAMEPAD 1 — DRIVER (driving)
  *   Left stick   : drive. Robot-centric or field-centric, set by FIELD_CENTRIC below
  *   Right stick X: turn
  *   Start        : reset heading (point robot away from driver, then press)
  *   X            : toggle SNAP-TO-ANGLE (auto-turns to SNAP_HEADING_DEG and holds it
  *                  while you strafe; moving the right stick cancels it)
- *   A            : toggle intake ON/OFF
- *   B            : toggle intake REVERSE (spit out) ON/OFF
  *   Y            : SERVO4 toggle: starts UP, press to swing DOWN 88 degrees, press again to go back UP
  *   Left bumper  : hold for slow drive (precision)
  *   D-pad left  : robot pulls right? tap to slow the left side
  *   D-pad right  : robot pulls left?  tap to slow the right side
+ *   Right bumper : toggle ALL lights ON/OFF (Prism strips + rgblight; they start ON)
  *
- * GAMEPAD 2 — OPERATOR (shooters + servos)
+ * GAMEPAD 2 — OPERATOR (intake + shooters + servos)
+ *   Right trigger: toggle intake FORWARD (pull in) ON/OFF
+ *   Left trigger : toggle intake REVERSE (spit out) ON/OFF
  *   D-pad left   : toggle LEFT shooter ON/OFF
  *   D-pad right  : toggle RIGHT shooter ON/OFF
  *   D-pad up/down: LEFT shooter speed  +100 / -100 RPM per tap
@@ -40,6 +47,8 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
  *   Left bumper  : SERVO2 goes to 90 degrees, waits SERVO2_HOLD_SEC (0.3s), then returns home
  *   A            : SERVO3 goes up 45 degrees, waits SERVO3_HOLD_SEC (0.55s), then returns home
  *   Y            : SHAKE: robot strafes left/right quickly for SHAKE_TIME_SEC to unstick balls
+ *   Right stick button (press the stick down): first Prism strip color:
+ *                  RED -> GREEN -> BLUE -> WHITE -> back to RED
  *   Rumble/LED   : flywheel "ready to fire" feedback
  *
  * HARDWARE CONFIG NAMES (must match the Driver Station config exactly)
@@ -49,6 +58,12 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
  *   ILM (intake left motor),  IRM (intake right motor)
  *   servo1, servo2, servo3, servo4 (servo ports, configured as "Servo")
  *   imu (the Control Hub's built-in IMU, I2C bus 0; usually already in the config)
+ *   prism (goBILDA Prism RGB LED Driver, Control Hub I2C bus 1)
+ *   rgblight (goBILDA RGB Indicator Light, servo port, configured as "Servo")
+ *     RED = shooters off, YELLOW = spinning up, GREEN = ready to fire
+ *
+ * PRISM LIGHTS NEED the goBILDA driver files in TeamCode/.../teamcode/Prism/
+ *   (Color.java, Direction.java, GoBildaPrismDriver.java, PrismAnimations.java)
  *
  * SHOOTER MOTORS MUST HAVE ENCODER CABLES PLUGGED IN.
  * Without them, velocity mode will run the motor at full power or not at all.
@@ -177,6 +192,26 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private static final double SNAP_MIN_POWER     = 0.06;  // overcomes friction near the target
     private static final double SNAP_TOLERANCE_DEG = 1.5;   // "close enough" window
 
+    // ---- Prism LED lights (gamepad1 Right bumper) ----
+    // The 4 strips are daisy-chained, so the Prism sees ONE long string of LEDs.
+    // List each strip's LED count IN THE ORDER THEY ARE CHAINED, starting from the
+    // strip plugged into the Prism. Kit strips: short = 6 LEDs, long = 12 LEDs.
+    // If the wrong strip gets the wrong pattern, reorder these numbers.
+    private static final int[] STRIP_LEDS      = {12, 12, 6, 6};
+    private static final int   LED_BRIGHTNESS  = 60;     // 0-100
+    private static final boolean LIGHTS_START_ON = true;
+
+    // First strip in the chain cycles through these on gamepad2 right stick button. Starts on the first one.
+    private static final Color[]  STRIP1_COLORS      = {Color.RED, Color.GREEN, Color.BLUE, Color.WHITE};
+    private static final String[] STRIP1_COLOR_NAMES = {"RED", "GREEN", "BLUE", "WHITE"};
+
+    // ---- goBILDA RGB Indicator Light (servo port) ----
+    // setPosition() picks the color. Do NOT reverse this servo or colors come out wrong.
+    private static final double RGB_OFF    = 0.000;
+    private static final double RGB_RED    = 0.277;
+    private static final double RGB_YELLOW = 0.388;
+    private static final double RGB_GREEN  = 0.500;
+
     // ---- Control Hub mounting (MUST match how the hub sits on YOUR robot) ----
     // LOGO = which way the REV logo on the hub faces.
     // USB  = which way the USB ports face.
@@ -190,8 +225,21 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private DcMotor frontLeft, frontRight, backLeft, backRight, intakeLeft, intakeRight;
     private DcMotorEx shooterLeft, shooterRight;
     private Servo servo1, servo2, servo3, servo4;
+    private ServoImplEx rgbLight;
     private IMU imu;
     private List<LynxModule> hubs;
+    private GoBildaPrismDriver prism;
+
+    // One animation per strip
+    private final PrismAnimations.Solid         stripSolid  = new PrismAnimations.Solid(Color.RED);
+    private final PrismAnimations.PoliceLights  stripSiren  = new PrismAnimations.PoliceLights();
+    private final PrismAnimations.RainbowSnakes stripRainbow = new PrismAnimations.RainbowSnakes();
+    private final PrismAnimations.DroidScan     stripScanner = new PrismAnimations.DroidScan(Color.RED);
+    private boolean lightsOn = false;
+    private boolean lastRB1;
+    private int strip1ColorIndex = 0;   // 0 = RED
+    private boolean lastRT2, lastLT2, lastRSB2;
+    private static final double TRIGGER_PRESSED = 0.5;  // trigger counts as "pressed" past halfway
 
     // ---- State ----
     private double targetRpmLeft  = START_RPM_LEFT;   // current left shooter target
@@ -213,7 +261,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private boolean wasReady = false;   // used to rumble once when flywheels reach speed
 
     // Previous button states (for detecting a single press)
-    private boolean lastA, lastB, lastUp, lastDown, lastX, lastRB, lastLB, lastA2, lastB2, lastX2, lastY1, lastLeft2, lastRight2;
+    private boolean lastUp, lastDown, lastX, lastRB, lastLB, lastA2, lastB2, lastX2, lastY1, lastLeft2, lastRight2;
 
     private boolean snapping = false;      // heading lock active
     private boolean snapOnTarget = false;  // within tolerance of snap heading
@@ -239,6 +287,10 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         servo2       = hardwareMap.get(Servo.class, "servo2");
         servo3       = hardwareMap.get(Servo.class, "servo3");
         servo4       = hardwareMap.get(Servo.class, "servo4");
+        rgbLight     = hardwareMap.get(ServoImplEx.class, "rgblight");
+        rgbLight.setPwmRange(new PwmControl.PwmRange(500, 2500)); // goBILDA color chart uses 500-2500us
+        rgbLight.setPwmEnable();
+        rgbLight.setPosition(RGB_RED);   // red at init: shooters off
 
         // Bulk reads: read ALL motor data from each hub in one call per loop
         // instead of one call per motor. Makes the loop much faster.
@@ -246,6 +298,10 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         for (LynxModule hub : hubs) {
             hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL);
         }
+
+        prism = hardwareMap.get(GoBildaPrismDriver.class, "prism");
+        setupLights();
+        setLights(LIGHTS_START_ON);
 
         imu = hardwareMap.get(IMU.class, "imu");
         imu.initialize(new IMU.Parameters(new RevHubOrientationOnRobot(HUB_LOGO, HUB_USB)));
@@ -294,10 +350,11 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
             shooterRight.setVelocityPIDFCoefficients(SHOOTER_P, SHOOTER_I, SHOOTER_D, SHOOTER_F_RIGHT);
         }
 
-        telemetry.addLine("GP1: drive, A=intake  B=reverse  X=snap  Y=servo4 open/close  LB=slow  Start=reset heading");
+        telemetry.addLine("GP1: drive, X=snap  Y=servo4 open/close  LB=slow  RB=lights  Start=reset heading");
         telemetry.addLine("GP2: Dpad left=LEFT shooter on/off  Dpad right=RIGHT shooter on/off");
         telemetry.addLine("GP2: Dpad up/down=LEFT RPM +/-100  B/X=RIGHT RPM +/-100");
         telemetry.addLine("GP2: RB=servo1  LB=servo2  A=servo3  Y=shake");
+        telemetry.addLine("GP2: RT=intake  LT=intake reverse  R-stick click=strip1 color");
         telemetry.addLine("Robot should face AWAY from driver at init.");
         telemetry.update();
 
@@ -440,8 +497,9 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
 
     // ---------------- Toggles (flip only on the press, not while held) ----------------
     private void handleToggles() {
-        // Gamepad 1 (driver): intake
-        boolean a = gamepad1.a, b = gamepad1.b;
+        // Gamepad 2 (operator): intake on the triggers (past halfway counts as a press)
+        boolean rt2 = gamepad2.right_trigger > TRIGGER_PRESSED;
+        boolean lt2 = gamepad2.left_trigger  > TRIGGER_PRESSED;
         // Gamepad 2 (operator): shooters + servos
         boolean up = gamepad2.dpad_up, down = gamepad2.dpad_down;
         boolean rb = gamepad2.right_bumper;
@@ -452,11 +510,12 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         boolean y1 = gamepad1.y;   // servo4 toggle (driver)
         boolean left2 = gamepad2.dpad_left, right2 = gamepad2.dpad_right;
 
-        if (a && !lastA) {
+        // Intake: RT toggles forward, LT toggles reverse. Pressing one cancels the other.
+        if (rt2 && !lastRT2) {
             intakeOn = !intakeOn;
             if (intakeOn) intakeReverse = false;
         }
-        if (b && !lastB) {
+        if (lt2 && !lastLT2) {
             intakeReverse = !intakeReverse;
             if (intakeReverse) intakeOn = false;
         }
@@ -509,7 +568,27 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
         lastLeft = left; lastRight = right;
 
-        lastA = a; lastB = b; lastUp = up; lastDown = down; lastRB = rb; lastLB = lb; lastA2 = a2;
+        // Prism lights: gamepad1 right bumper flips them on/off.
+        // Only talks to the Prism on the press, so it doesn't slow the loop.
+        boolean rb1 = gamepad1.right_bumper;
+        if (rb1 && !lastRB1) {
+            setLights(!lightsOn);
+        }
+        lastRB1 = rb1;
+
+        // First Prism strip: gamepad2 right stick button steps to the next color and loops back to red.
+        boolean rsb2 = gamepad2.right_stick_button;
+        if (rsb2 && !lastRSB2) {
+            strip1ColorIndex = (strip1ColorIndex + 1) % STRIP1_COLORS.length;
+            stripSolid.setPrimaryColor(STRIP1_COLORS[strip1ColorIndex]);
+            // Only send it if the lights are on; if they're off, the new color shows when RB turns them back on.
+            if (lightsOn) {
+                prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, stripSolid);
+            }
+        }
+        lastRSB2 = rsb2;
+
+        lastRT2 = rt2; lastLT2 = lt2; lastUp = up; lastDown = down; lastRB = rb; lastLB = lb; lastA2 = a2;
         lastB2 = b2; lastX2 = x2; lastY1 = y1; lastLeft2 = left2; lastRight2 = right2;
     }
 
@@ -549,6 +628,53 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         } else {
             shooterRight.setPower(0);
         }
+    }
+
+    // ---------------- Prism LED lights ----------------
+    // Gives each daisy-chained strip its own LED range and animation.
+    private void setupLights() {
+        PrismAnimations.AnimationBase[] anims = {stripSolid, stripSiren, stripRainbow, stripScanner};
+
+        // Strip 1: solid color, starts RED (gamepad2 right stick button cycles it)
+        stripSolid.setPrimaryColor(STRIP1_COLORS[0]);
+
+        // Strip 2: siren (red / white / blue police lights)
+        stripSiren.setPoliceLightsStyle(PrismAnimations.PoliceLights.PoliceLightsStyle.Style1);
+        stripSiren.setPeriod(500);          // ms per loop; lower = faster flashing
+
+        // Strip 3: rainbow snakes chasing down the strip
+        stripRainbow.setNumberOfSnakes(2);
+        stripRainbow.setSnakeLength(3);
+        stripRainbow.setSpacingBetween(3);
+        stripRainbow.setSpeed(0.5f);
+
+        // Strip 4: "Knight Rider" scanner bouncing back and forth
+        stripScanner.setEyeWidth(1);
+        stripScanner.setTrailWidth(2);
+        stripScanner.setSpeed(0.5f);
+
+        int start = 0;
+        for (int i = 0; i < anims.length; i++) {
+            int stop = start + STRIP_LEDS[i] - 1;   // stop index is the LAST LED, inclusive
+            anims[i].setStartIndex(start);
+            anims[i].setStopIndex(stop);
+            anims[i].setBrightness(LED_BRIGHTNESS);
+            start = stop + 1;
+        }
+    }
+
+    private void setLights(boolean on) {
+        if (on) {
+            prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, stripSolid);
+            prism.insertAndUpdateAnimation(LayerHeight.LAYER_1, stripSiren);
+            prism.insertAndUpdateAnimation(LayerHeight.LAYER_2, stripRainbow);
+            prism.insertAndUpdateAnimation(LayerHeight.LAYER_3, stripScanner);
+            rgbLight.setPosition(RGB_RED);   // readyFeedback() takes over from here
+        } else {
+            prism.clearAllAnimations();
+            rgbLight.setPosition(RGB_OFF);
+        }
+        lightsOn = on;
     }
 
     // ---------------- Helpers ----------------
@@ -596,12 +722,24 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
         wasReady = ready;
 
+        // Gamepad LED and the robot's RGB light show the same thing.
         if (!shooterLeftOn && !shooterRightOn) {
             gamepad2.setLedColor(1, 0, 0, Gamepad.LED_DURATION_CONTINUOUS);
         } else if (ready) {
             gamepad2.setLedColor(0, 1, 0, Gamepad.LED_DURATION_CONTINUOUS);
         } else {
             gamepad2.setLedColor(1, 1, 0, Gamepad.LED_DURATION_CONTINUOUS);
+        }
+
+        // Robot RGB light: same colors, but only while the lights are toggled ON (GP1 RB).
+        if (!lightsOn) {
+            rgbLight.setPosition(RGB_OFF);
+        } else if (!shooterLeftOn && !shooterRightOn) {
+            rgbLight.setPosition(RGB_RED);
+        } else if (ready) {
+            rgbLight.setPosition(RGB_GREEN);
+        } else {
+            rgbLight.setPosition(RGB_YELLOW);
         }
     }
 
@@ -642,7 +780,9 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
                 : snapOnTarget ? "LOCKED @ " + SNAP_HEADING_DEG + "°"
                 : "turning to " + SNAP_HEADING_DEG + "°");
         telemetry.addData("Shake", shaking ? "SHAKING" : "off  (GP2 Y)");
-        telemetry.addData("Intake", intakeOn ? "ON" : intakeReverse ? "REVERSE" : "OFF");
+        telemetry.addData("Lights", lightsOn ? "ON  (GP1 RB)" : "OFF  (GP1 RB)");
+        telemetry.addData("Strip 1 color", "%s  (GP2 right stick click)", STRIP1_COLOR_NAMES[strip1ColorIndex]);
+        telemetry.addData("Intake", "%s  (GP2 RT / LT)", intakeOn ? "ON" : intakeReverse ? "REVERSE" : "OFF");
         telemetry.addData("Servo1", "%s  (pos %.2f)",
                 servo1Out ? String.format("OUT, returning in %.1fs",
                         Math.max(0, SERVO1_HOLD_SEC - servo1Timer.seconds())) : "HOME",
@@ -673,5 +813,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
         shooterLeft.setPower(0);
         shooterRight.setPower(0);
+        prism.clearAllAnimations();   // lights off when the OpMode stops
+        rgbLight.setPosition(RGB_OFF);
     }
 }
