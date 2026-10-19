@@ -16,7 +16,7 @@ import java.util.List;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
 /*
- * Mecanum drive + 2 velocity-controlled shooters + 2-motor intake + 3 servos, all mechanisms on toggles.
+ * Mecanum drive + 2 velocity-controlled shooters + 2-motor intake + 4 servos, all mechanisms on toggles.
  *
  * GAMEPAD 1 — DRIVER (driving + intake)
  *   Left stick   : drive. Robot-centric or field-centric, set by FIELD_CENTRIC below
@@ -26,6 +26,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
  *                  while you strafe; moving the right stick cancels it)
  *   A            : toggle intake ON/OFF
  *   B            : toggle intake REVERSE (spit out) ON/OFF
+ *   Y            : SERVO4 toggle: starts UP, press to swing DOWN 88 degrees, press again to go back UP
  *   Left bumper  : hold for slow drive (precision)
  *   D-pad left   : robot pulls right? tap to slow the left side
  *   D-pad right  : robot pulls left?  tap to slow the right side
@@ -35,9 +36,9 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
  *   D-pad right  : toggle RIGHT shooter ON/OFF
  *   D-pad up/down: LEFT shooter speed  +100 / -100 RPM per tap
  *   B / X        : RIGHT shooter speed +100 / -100 RPM per tap (B = up, X = down)
- *   Right bumper : SERVO1 opens, waits SERVO1_HOLD_SEC (0.65s), then returns home
- *   Left bumper  : SERVO2 goes to 90 degrees, waits SERVO2_HOLD_SEC (0.65s), then returns home
- *   A            : SERVO3 goes up 45 degrees, waits SERVO3_HOLD_SEC (0.75s), then returns home
+ *   Right bumper : SERVO1 opens, waits SERVO1_HOLD_SEC (0.45s), then returns home
+ *   Left bumper  : SERVO2 goes to 90 degrees, waits SERVO2_HOLD_SEC (0.3s), then returns home
+ *   A            : SERVO3 goes up 45 degrees, waits SERVO3_HOLD_SEC (0.55s), then returns home
  *   Rumble/LED   : flywheel "ready to fire" feedback
  *
  * HARDWARE CONFIG NAMES (must match the Driver Station config exactly)
@@ -45,7 +46,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
  *   BLM (back left motor),  BRM (back right motor),
  *   SLM (shooter left motor), SRM (shooter right motor),
  *   ILM (intake left motor),  IRM (intake right motor)
- *   servo1, servo2, servo3 (servo ports, configured as "Servo")
+ *   servo1, servo2, servo3, servo4 (servo ports, configured as "Servo")
  *   imu (the Control Hub's built-in IMU, I2C bus 0; usually already in the config)
  *
  * SHOOTER MOTORS MUST HAVE ENCODER CABLES PLUGGED IN.
@@ -93,10 +94,10 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     //   goBILDA 2000-series (dual mode)  : 300
     // If it moves the wrong way, set SERVO1_REVERSED = true.
     private static final double  SERVO_RANGE_DEG   = 180;
-    private static final double  SERVO1_HOME_DEG   = 0;    // where it rests at start
-    private static final double  SERVO1_TARGET_DEG = 125;  // where the button sends it (raise/lower to adjust how far it goes)
+    private static final double  SERVO1_HOME_DEG   = 15;   // where it rests at start
+    private static final double  SERVO1_TARGET_DEG = 90;  // where the button sends it (raise/lower to adjust how far it goes)
     private static final boolean SERVO1_REVERSED   = true;
-    private static final double  SERVO1_HOLD_SEC   = 0.65;  // how long it stays open before returning
+    private static final double  SERVO1_HOLD_SEC   = 0.45;  // how long it stays open before returning
 
     // ---- Servo2 (gamepad2 Left bumper) ----
     // Same idea as servo1, with its own settings. Uses the same SERVO_RANGE_DEG,
@@ -104,7 +105,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private static final double  SERVO2_HOME_DEG   = 20;   // kept off 0 so the servo isn't jammed at its end stop
     private static final double  SERVO2_TARGET_DEG = 110;  // still a 90-degree swing
     private static final boolean SERVO2_REVERSED   = false; // set true if it moves the wrong way
-    private static final double  SERVO2_HOLD_SEC   = 0.65;  // how long it stays out before returning
+    private static final double  SERVO2_HOLD_SEC   = 0.3;   // how long it stays out before returning
 
     // ---- Servo3 (gamepad2 A) ----
     // Goes UP (home + 45 degrees) when A is pressed, returns home after SERVO3_HOLD_SEC.
@@ -115,7 +116,16 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private static final double  SERVO3_SWING_DEG  = 45;   // how far UP goes from home
     private static final double  SERVO3_UP_DEG     = SERVO3_HOME_DEG + SERVO3_SWING_DEG;
     private static final boolean SERVO3_REVERSED   = false;
-    private static final double  SERVO3_HOLD_SEC   = 0.75;  // how long it stays up before returning
+    private static final double  SERVO3_HOLD_SEC   = 0.55;  // how long it stays up before returning
+
+    // ---- Servo4 (gamepad1 Y) ----
+    // TOGGLE: starts UP at SERVO4_HOME_DEG. Press Y to swing DOWN 88 degrees, press Y again to go back up.
+    // No timer; it stays where you put it. Uses the same SERVO_RANGE_DEG as the others.
+    // If it buzzes at the bottom (end stop), lower SERVO4_SWING_DEG (e.g. 70).
+    private static final double  SERVO4_HOME_DEG   = 0;    // start position (up) - at the end of travel; raise to 5-10 if it buzzes at rest
+    private static final double  SERVO4_SWING_DEG  = 88;   // how far DOWN it goes when toggled (0 + 88 = 88), fixed
+    private static final double  SERVO4_OPEN_DEG   = SERVO4_HOME_DEG + SERVO4_SWING_DEG;  // 88 deg = down
+    private static final boolean SERVO4_REVERSED   = true;   // reversed: down swing now goes the other way
 
     // ---- Stick feel ----
     private static final double STICK_DEADZONE = 0.05;  // ignore tiny stick drift
@@ -171,7 +181,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     // ---- Hardware ----
     private DcMotor frontLeft, frontRight, backLeft, backRight, intakeLeft, intakeRight;
     private DcMotorEx shooterLeft, shooterRight;
-    private Servo servo1, servo2, servo3;
+    private Servo servo1, servo2, servo3, servo4;
     private IMU imu;
     private List<LynxModule> hubs;
 
@@ -188,10 +198,11 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private final ElapsedTime servo3Timer = new ElapsedTime();
     private boolean servo2Out = false;
     private final ElapsedTime servo2Timer = new ElapsedTime();
+    private boolean servo4Open = false; // false = up (home), true = down
     private boolean wasReady = false;   // used to rumble once when flywheels reach speed
 
     // Previous button states (for detecting a single press)
-    private boolean lastA, lastB, lastUp, lastDown, lastX, lastRB, lastLB, lastA2, lastB2, lastX2, lastLeft2, lastRight2;
+    private boolean lastA, lastB, lastUp, lastDown, lastX, lastRB, lastLB, lastA2, lastB2, lastX2, lastY1, lastLeft2, lastRight2;
 
     private boolean snapping = false;      // heading lock active
     private boolean snapOnTarget = false;  // within tolerance of snap heading
@@ -216,6 +227,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         servo1       = hardwareMap.get(Servo.class, "servo1");
         servo2       = hardwareMap.get(Servo.class, "servo2");
         servo3       = hardwareMap.get(Servo.class, "servo3");
+        servo4       = hardwareMap.get(Servo.class, "servo4");
 
         // Bulk reads: read ALL motor data from each hub in one call per loop
         // instead of one call per motor. Makes the loop much faster.
@@ -252,6 +264,8 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         servo2.setPosition(degToServoPos(SERVO2_HOME_DEG));
         servo3.setDirection(SERVO3_REVERSED ? Servo.Direction.REVERSE : Servo.Direction.FORWARD);
         servo3.setPosition(degToServoPos(SERVO3_HOME_DEG));
+        servo4.setDirection(SERVO4_REVERSED ? Servo.Direction.REVERSE : Servo.Direction.FORWARD);
+        servo4.setPosition(degToServoPos(SERVO4_HOME_DEG));
 
         for (DcMotor m : new DcMotor[]{frontLeft, frontRight, backLeft, backRight, intakeLeft, intakeRight}) {
             m.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
@@ -269,7 +283,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
             shooterRight.setVelocityPIDFCoefficients(SHOOTER_P, SHOOTER_I, SHOOTER_D, SHOOTER_F_RIGHT);
         }
 
-        telemetry.addLine("GP1: drive, A=intake  B=reverse  X=snap  LB=slow  Start=reset heading");
+        telemetry.addLine("GP1: drive, A=intake  B=reverse  X=snap  Y=servo4 open/close  LB=slow  Start=reset heading");
         telemetry.addLine("GP2: Dpad left=LEFT shooter on/off  Dpad right=RIGHT shooter on/off");
         telemetry.addLine("GP2: Dpad up/down=LEFT RPM +/-100  B/X=RIGHT RPM +/-100");
         telemetry.addLine("GP2: RB=servo1  LB=servo2  A=servo3");
@@ -400,6 +414,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         boolean a2 = gamepad2.a;
         boolean b2 = gamepad2.b;
         boolean x2 = gamepad2.x;
+        boolean y1 = gamepad1.y;   // servo4 toggle (driver)
         boolean left2 = gamepad2.dpad_left, right2 = gamepad2.dpad_right;
 
         if (a && !lastA) {
@@ -430,6 +445,10 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
             servo2Out = true;
             servo2Timer.reset();
         }
+        // Servo4: gamepad1 Y flips between open and closed.
+        if (y1 && !lastY1) {
+            servo4Open = !servo4Open;
+        }
         // LEFT shooter speed: D-pad up = +RPM_STEP, D-pad down = -RPM_STEP.
         // Stops at MIN_RPM / SHOOTER_MAX_RPM.
         if (up && !lastUp) {
@@ -456,7 +475,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         lastLeft = left; lastRight = right;
 
         lastA = a; lastB = b; lastUp = up; lastDown = down; lastRB = rb; lastLB = lb; lastA2 = a2;
-        lastB2 = b2; lastX2 = x2; lastLeft2 = left2; lastRight2 = right2;
+        lastB2 = b2; lastX2 = x2; lastY1 = y1; lastLeft2 = left2; lastRight2 = right2;
     }
 
     // ---------------- Apply mechanism outputs ----------------
@@ -480,6 +499,8 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
             servo2Out = false;
         }
         servo2.setPosition(degToServoPos(servo2Out ? SERVO2_TARGET_DEG : SERVO2_HOME_DEG));
+
+        servo4.setPosition(degToServoPos(servo4Open ? SERVO4_OPEN_DEG : SERVO4_HOME_DEG));
 
         // Each shooter runs on its own. setPower(0) lets a flywheel coast
         // instead of PID-braking to zero.
@@ -598,6 +619,8 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
                 servo3Up ? String.format("UP, returning in %.1fs",
                         Math.max(0, SERVO3_HOLD_SEC - servo3Timer.seconds())) : "HOME",
                 servo3.getPosition());
+        telemetry.addData("Servo4", "%s  (pos %.2f)",
+                servo4Open ? "DOWN" : "UP", servo4.getPosition());
         telemetry.addData("Shooters", "LEFT %s  /  RIGHT %s",
                 shooterLeftOn ? "ON" : "OFF", shooterRightOn ? "ON" : "OFF");
         telemetry.addData("Left RPM",  "%.0f / target %.0f  (D-pad up/down)",
