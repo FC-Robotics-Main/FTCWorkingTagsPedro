@@ -28,7 +28,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
  *   B            : toggle intake REVERSE (spit out) ON/OFF
  *   Y            : SERVO4 toggle: starts UP, press to swing DOWN 88 degrees, press again to go back UP
  *   Left bumper  : hold for slow drive (precision)
- *   D-pad left   : robot pulls right? tap to slow the left side
+ *   D-pad left  : robot pulls right? tap to slow the left side
  *   D-pad right  : robot pulls left?  tap to slow the right side
  *
  * GAMEPAD 2 — OPERATOR (shooters + servos)
@@ -39,6 +39,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
  *   Right bumper : SERVO1 opens, waits SERVO1_HOLD_SEC (0.45s), then returns home
  *   Left bumper  : SERVO2 goes to 90 degrees, waits SERVO2_HOLD_SEC (0.3s), then returns home
  *   A            : SERVO3 goes up 45 degrees, waits SERVO3_HOLD_SEC (0.55s), then returns home
+ *   Y            : SHAKE: robot strafes left/right quickly for SHAKE_TIME_SEC to unstick balls
  *   Rumble/LED   : flywheel "ready to fire" feedback
  *
  * HARDWARE CONFIG NAMES (must match the Driver Station config exactly)
@@ -127,6 +128,13 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private static final double  SERVO4_OPEN_DEG   = SERVO4_HOME_DEG + SERVO4_SWING_DEG;  // 88 deg = down
     private static final boolean SERVO4_REVERSED   = true;   // reversed: down swing now goes the other way
 
+    // ---- Shake (gamepad2 Y) ----
+    // One press = robot strafes left, right, left, right... to knock stuck balls loose.
+    // Drive sticks are ignored while it shakes. Press again after it finishes to repeat.
+    private static final double SHAKE_POWER    = 0.5;   // how hard it shakes (0-1); raise if balls stay stuck
+    private static final double SHAKE_FLIP_SEC = 0.08;  // time each direction; lower = faster shake
+    private static final double SHAKE_TIME_SEC = 0.64;  // total shake time (8 flips, ends where it started)
+
     // ---- Stick feel ----
     private static final double STICK_DEADZONE = 0.05;  // ignore tiny stick drift
     private static final double STICK_CURVE    = 2.0;   // 1 = linear, 2 = squared (finer low-speed control)
@@ -199,6 +207,9 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private boolean servo2Out = false;
     private final ElapsedTime servo2Timer = new ElapsedTime();
     private boolean servo4Open = false; // false = up (home), true = down
+    private boolean shaking = false;    // shake in progress
+    private final ElapsedTime shakeTimer = new ElapsedTime();
+    private boolean lastY2;
     private boolean wasReady = false;   // used to rumble once when flywheels reach speed
 
     // Previous button states (for detecting a single press)
@@ -286,7 +297,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         telemetry.addLine("GP1: drive, A=intake  B=reverse  X=snap  Y=servo4 open/close  LB=slow  Start=reset heading");
         telemetry.addLine("GP2: Dpad left=LEFT shooter on/off  Dpad right=RIGHT shooter on/off");
         telemetry.addLine("GP2: Dpad up/down=LEFT RPM +/-100  B/X=RIGHT RPM +/-100");
-        telemetry.addLine("GP2: RB=servo1  LB=servo2  A=servo3");
+        telemetry.addLine("GP2: RB=servo1  LB=servo2  A=servo3  Y=shake");
         telemetry.addLine("Robot should face AWAY from driver at init.");
         telemetry.update();
 
@@ -365,6 +376,30 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         } else {
             rx = 0;
             holding = false;               // robot is sitting still
+        }
+
+        // ---- Shake (gamepad2 Y) ----
+        // Overrides driving: pure strafe that flips direction every SHAKE_FLIP_SEC.
+        boolean y2 = gamepad2.y;
+        if (y2 && !lastY2 && !shaking) {
+            shaking = true;
+            shakeTimer.reset();
+            snapping = false;
+            holding = false;
+        }
+        lastY2 = y2;
+        if (shaking) {
+            double t = shakeTimer.seconds();
+            if (t >= SHAKE_TIME_SEC) {
+                shaking = false;
+            } else {
+                double s = ((int) (t / SHAKE_FLIP_SEC)) % 2 == 0 ? SHAKE_POWER : -SHAKE_POWER;
+                frontLeft.setPower(s);
+                backLeft.setPower(-s);
+                frontRight.setPower(-s);
+                backRight.setPower(s);
+                return;
+            }
         }
 
         double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(rx), 1);
@@ -606,6 +641,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         telemetry.addData("Snap", !snapping ? "off"
                 : snapOnTarget ? "LOCKED @ " + SNAP_HEADING_DEG + "°"
                 : "turning to " + SNAP_HEADING_DEG + "°");
+        telemetry.addData("Shake", shaking ? "SHAKING" : "off  (GP2 Y)");
         telemetry.addData("Intake", intakeOn ? "ON" : intakeReverse ? "REVERSE" : "OFF");
         telemetry.addData("Servo1", "%s  (pos %.2f)",
                 servo1Out ? String.format("OUT, returning in %.1fs",
