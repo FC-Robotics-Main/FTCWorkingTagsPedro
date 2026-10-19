@@ -25,7 +25,8 @@ import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
  * Mecanum drive + 2 velocity-controlled shooters + 2-motor intake + 4 servos, all mechanisms on toggles.
  *
  * GAMEPAD 1 — DRIVER (driving)
- *   Left stick   : drive. Robot-centric or field-centric, set by FIELD_CENTRIC below
+ *   Left stick   : drive. FIELD-CENTRIC: stick forward = away from the driver, no matter which
+ *                  way the robot faces. Set FIELD_CENTRIC = false below to go back to robot-centric.
  *   Right stick X: turn
  *   Start        : reset heading (point robot away from driver, then press)
  *   X            : toggle SNAP-TO-ANGLE (auto-turns to SNAP_HEADING_DEG and holds it
@@ -157,7 +158,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     // ---- Drive mode ----
     // false = ROBOT-CENTRIC (stick forward = robot's front). Use this while testing.
     // true  = FIELD-CENTRIC (stick forward = away from driver). Needs HUB_LOGO/HUB_USB set correctly.
-    private static final boolean FIELD_CENTRIC = false;
+    private static final boolean FIELD_CENTRIC = true;
 
     // ---- Heading hold (fixes curving) ----
     // When you drive without touching the turn stick, the IMU keeps the robot
@@ -219,7 +220,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private static final RevHubOrientationOnRobot.LogoFacingDirection HUB_LOGO =
             RevHubOrientationOnRobot.LogoFacingDirection.UP;
     private static final RevHubOrientationOnRobot.UsbFacingDirection HUB_USB =
-            RevHubOrientationOnRobot.UsbFacingDirection.FORWARD;
+            RevHubOrientationOnRobot.UsbFacingDirection.LEFT;   // USB ports face the robot's LEFT side
 
     // ---- Hardware ----
     private DcMotor frontLeft, frontRight, backLeft, backRight, intakeLeft, intakeRight;
