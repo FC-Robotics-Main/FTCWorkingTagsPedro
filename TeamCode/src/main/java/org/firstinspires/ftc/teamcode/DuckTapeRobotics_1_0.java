@@ -33,24 +33,33 @@ import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
  *                  while you strafe; moving the right stick cancels it)
  *   Y            : SERVO4 toggle: starts UP, press to swing DOWN 88 degrees, press again to go back UP
  *   Left bumper  : hold for slow drive (precision)
- *   D-pad left  : robot pulls right? tap to slow the left side
- *   D-pad right  : robot pulls left?  tap to slow the right side
  *   Right bumper : toggle ALL lights ON/OFF (Prism strips + rgblight; they start ON)
  *
- * GAMEPAD 2 — OPERATOR (intake + shooters + servos)
- *   Right trigger: toggle intake FORWARD (pull in) ON/OFF
- *   Left trigger : toggle intake REVERSE (spit out) ON/OFF
- *   D-pad left   : toggle LEFT shooter ON/OFF
- *   D-pad right  : toggle RIGHT shooter ON/OFF
- *   D-pad up/down: LEFT shooter speed  +100 / -100 RPM per tap
- *   B / X        : RIGHT shooter speed +100 / -100 RPM per tap (B = up, X = down)
- *   Right bumper : SERVO1 opens, waits SERVO1_HOLD_SEC (0.45s), then returns home
- *   Left bumper  : SERVO2 goes to 90 degrees, waits SERVO2_HOLD_SEC (0.3s), then returns home
- *   A            : SERVO3 goes up 45 degrees, waits SERVO3_HOLD_SEC (0.55s), then returns home
- *   Y            : SHAKE: robot strafes left/right quickly for SHAKE_TIME_SEC to unstick balls
- *   Right stick button (press the stick down): first Prism strip color:
+ * GAMEPAD 2 — OPERATOR
+ *   LEFT SIDE = POLLEN shooter
+ *     D-pad up/down: POLLEN speed +100 / -100 RPM per tap
+ *     D-pad left   : toggle POLLEN shooter ON/OFF
+ *     Left bumper  : SERVO2 (pollen) goes to 90 degrees, waits SERVO2_HOLD_SEC (0.3s), then returns home
+ *   RIGHT SIDE = NECTAR shooter
+ *     Y / A        : NECTAR speed +100 / -100 RPM per tap (Y = up, A = down)
+ *     B            : toggle NECTAR shooter ON/OFF
+ *     Right bumper : SERVO1 (nectar) opens, waits SERVO1_HOLD_SEC (0.45s), then returns home
+ *     X            : SERVO3 (nectar) goes up 45 degrees, waits SERVO3_HOLD_SEC (0.55s), then returns home
+ *   Everything else
+ *     Right trigger: toggle intake FORWARD (pull in) ON/OFF
+ *     Left trigger : toggle intake REVERSE (spit out) ON/OFF
+ *     D-pad right  : SHAKE: robot strafes left/right quickly for SHAKE_TIME_SEC to unstick balls
+ *     Right stick button (press the stick down): first Prism strip color:
  *                  RED -> GREEN -> BLUE -> WHITE -> back to RED
+ *     Start        : second Prism strip: swaps RED <-> BLUE (starts RED)
+ *                  (don't press Start together with A or B; that combo re-binds the gamepad)
+ *     Left stick button (press the stick down): ALERT: second strip runs the siren AND the
+ *                  intake runs in REVERSE for ALERT_SEC (3s), then both go back to how they were
  *   Rumble/LED   : flywheel "ready to fire" feedback
+ *   Prism strip 3: NECTAR shooter target RPM.  Prism strip 4: POLLEN shooter target RPM.
+ *                  (set which shooter is which with NECTAR_IS_LEFT_SHOOTER)
+ *                  <2200 SIREN, 2200 RED, 2300 ORANGE, 2400 GREEN, 2500 BLUE, 2600 WHITE,
+ *                  >2600 SPECIAL (fast full rainbow)
  *
  * HARDWARE CONFIG NAMES (must match the Driver Station config exactly)
  *   FLM (front left motor), FRM (front right motor),
@@ -167,13 +176,10 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private static final double  HOLD_KP        = 1.5;   // raise if it still curves, lower if it wiggles
     private static final double  HOLD_MAX_POWER = 0.3;   // cap so correction never overpowers the driver
 
-    // ---- Drive balance (D-pad LEFT / RIGHT during TeleOp) ----
-    // Robot pulls RIGHT  -> tap D-pad LEFT  (slows the left side)
-    // Robot pulls LEFT   -> tap D-pad RIGHT (slows the right side)
-    // Each tap = 0.05. Telemetry shows the value; put it here to make it permanent.
-    private static final double DRIVE_BALANCE_START = 0.0;
-    private static final double DRIVE_BALANCE_STEP  = 0.05;
-    private static final double DRIVE_BALANCE_MAX   = 0.5;
+    // ---- Drive balance (set here in code; no buttons) ----
+    // 0.0 = even. Robot pulls RIGHT -> set positive (e.g. 0.05) to slow the LEFT side.
+    //             Robot pulls LEFT  -> set negative (e.g. -0.05) to slow the RIGHT side.
+    private static final double DRIVE_BALANCE = 0.0;
 
     // ---- Per-wheel trim ----
     // Multiplies each wheel's power. 1.0 = normal. If one motor is faster
@@ -206,6 +212,20 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private static final Color[]  STRIP1_COLORS      = {Color.RED, Color.GREEN, Color.BLUE, Color.WHITE};
     private static final String[] STRIP1_COLOR_NAMES = {"RED", "GREEN", "BLUE", "WHITE"};
 
+    // Second strip: gamepad2 Start swaps red/blue. Gamepad2 left stick click = siren + intake reverse.
+    private static final double ALERT_SEC = 3.0;   // how long the siren + reverse intake lasts
+
+    // Third strip = NECTAR shooter's target RPM. Fourth strip = POLLEN shooter's target RPM.
+    // true  = nectar is the LEFT shooter motor (SLM), pollen is the RIGHT shooter motor (SRM).
+    // false = swapped. The gamepad layout follows nectar/pollen, not left/right motor:
+    // pollen controls are always on the LEFT of gamepad 2, nectar on the RIGHT.
+    private static final boolean NECTAR_IS_LEFT_SHOOTER = true;
+    //   below 2200 = SIREN, 2200 = RED, 2300 = ORANGE, 2400 = GREEN, 2500 = BLUE, 2600 = WHITE,
+    //   above 2600 = SPECIAL: fast full rainbow
+    private static final double[] RPM_LIGHT_STEPS  = {2200, 2300, 2400, 2500, 2600};
+    private static final Color[]  RPM_LIGHT_COLORS = {Color.RED, Color.ORANGE, Color.GREEN, Color.BLUE, Color.WHITE};
+    private static final String[] RPM_LIGHT_NAMES  = {"RED", "ORANGE", "GREEN", "BLUE", "WHITE"};
+
     // ---- goBILDA RGB Indicator Light (servo port) ----
     // setPosition() picks the color. Do NOT reverse this servo or colors come out wrong.
     private static final double RGB_OFF    = 0.000;
@@ -233,13 +253,18 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
 
     // One animation per strip
     private final PrismAnimations.Solid         stripSolid  = new PrismAnimations.Solid(Color.RED);
+    private final PrismAnimations.Solid         strip2Solid = new PrismAnimations.Solid(Color.RED);
     private final PrismAnimations.PoliceLights  stripSiren  = new PrismAnimations.PoliceLights();
-    private final PrismAnimations.RainbowSnakes stripRainbow = new PrismAnimations.RainbowSnakes();
-    private final PrismAnimations.DroidScan     stripScanner = new PrismAnimations.DroidScan(Color.RED);
+    // Strips 3 and 4 each show one shooter's target RPM (see RpmStrip below).
+    private final RpmStrip nectarStrip = new RpmStrip(LayerHeight.LAYER_2, NECTAR_IS_LEFT_SHOOTER,  STRIP_LEDS[2]);
+    private final RpmStrip pollenStrip = new RpmStrip(LayerHeight.LAYER_3, !NECTAR_IS_LEFT_SHOOTER, STRIP_LEDS[3]);
     private boolean lightsOn = false;
     private boolean lastRB1;
     private int strip1ColorIndex = 0;   // 0 = RED
-    private boolean lastRT2, lastLT2, lastRSB2;
+    private boolean lastRT2, lastLT2, lastRSB2, lastStart2, lastLSB2;
+    private boolean strip2Blue = false;     // false = RED, true = BLUE
+    private boolean alertActive = false;    // siren + reverse intake running
+    private final ElapsedTime alertTimer = new ElapsedTime();
     private static final double TRIGGER_PRESSED = 0.5;  // trigger counts as "pressed" past halfway
 
     // ---- State ----
@@ -269,10 +294,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private boolean holding = false;       // heading hold active
     private double  holdHeading = 0;       // heading (radians) being held
 
-    // Live drive balance (D-pad left/right). Starts at DRIVE_BALANCE_START.
-    // Once you find a value that drives straight, copy it into DRIVE_BALANCE_START.
-    private double driveBalance = DRIVE_BALANCE_START;
-    private boolean lastLeft, lastRight;
+    private final double driveBalance = DRIVE_BALANCE;
 
     @Override
     public void runOpMode() {
@@ -351,13 +373,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
             shooterRight.setVelocityPIDFCoefficients(SHOOTER_P, SHOOTER_I, SHOOTER_D, SHOOTER_F_RIGHT);
         }
 
-        telemetry.addLine("GP1: drive, X=snap  Y=servo4 open/close  LB=slow  RB=lights  Start=reset heading");
-        telemetry.addLine("GP2: Dpad left=LEFT shooter on/off  Dpad right=RIGHT shooter on/off");
-        telemetry.addLine("GP2: Dpad up/down=LEFT RPM +/-100  B/X=RIGHT RPM +/-100");
-        telemetry.addLine("GP2: RB=servo1  LB=servo2  A=servo3  Y=shake");
-        telemetry.addLine("GP2: RT=intake  LT=intake reverse  R-stick click=strip1 color");
-        telemetry.addLine("Robot should face AWAY from driver at init.");
-        telemetry.update();
+        updateTelemetry();   // show voltage + RPMs during INIT too
 
         waitForStart();
 
@@ -371,6 +387,8 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
             drive();
             handleToggles();
             runMechanisms();
+            nectarStrip.update();
+            pollenStrip.update();
             readyFeedback();
             updateTelemetry();
         }
@@ -436,9 +454,9 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
             holding = false;               // robot is sitting still
         }
 
-        // ---- Shake (gamepad2 Y) ----
+        // ---- Shake (gamepad2 D-pad right) ----
         // Overrides driving: pure strafe that flips direction every SHAKE_FLIP_SEC.
-        boolean y2 = gamepad2.y;
+        boolean y2 = gamepad2.dpad_right;   // SHAKE button
         if (y2 && !lastY2 && !shaking) {
             shaking = true;
             shakeTimer.reset();
@@ -501,15 +519,21 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         // Gamepad 2 (operator): intake on the triggers (past halfway counts as a press)
         boolean rt2 = gamepad2.right_trigger > TRIGGER_PRESSED;
         boolean lt2 = gamepad2.left_trigger  > TRIGGER_PRESSED;
-        // Gamepad 2 (operator): shooters + servos
-        boolean up = gamepad2.dpad_up, down = gamepad2.dpad_down;
-        boolean rb = gamepad2.right_bumper;
-        boolean lb = gamepad2.left_bumper;
-        boolean a2 = gamepad2.a;
-        boolean b2 = gamepad2.b;
-        boolean x2 = gamepad2.x;
+        // Gamepad 2 LEFT side = POLLEN, RIGHT side = NECTAR
+        boolean pollenUp   = gamepad2.dpad_up,  pollenDown = gamepad2.dpad_down, pollenOnOff = gamepad2.dpad_left;
+        boolean nectarUp   = gamepad2.y,        nectarDown = gamepad2.a,         nectarOnOff = gamepad2.b;
+        // Map nectar/pollen onto the actual left/right shooter motors.
+        boolean up     = NECTAR_IS_LEFT_SHOOTER ? nectarUp    : pollenUp;      // left motor  RPM +
+        boolean down   = NECTAR_IS_LEFT_SHOOTER ? nectarDown  : pollenDown;    // left motor  RPM -
+        boolean left2  = NECTAR_IS_LEFT_SHOOTER ? nectarOnOff : pollenOnOff;   // left motor  on/off
+        boolean b2     = NECTAR_IS_LEFT_SHOOTER ? pollenUp    : nectarUp;      // right motor RPM +
+        boolean x2     = NECTAR_IS_LEFT_SHOOTER ? pollenDown  : nectarDown;    // right motor RPM -
+        boolean right2 = NECTAR_IS_LEFT_SHOOTER ? pollenOnOff : nectarOnOff;   // right motor on/off
+        // Gamepad 2: servos
+        boolean rb = gamepad2.right_bumper;   // servo1 (nectar)
+        boolean lb = gamepad2.left_bumper;    // servo2 (pollen)
+        boolean a2 = gamepad2.x;              // servo3 (nectar)
         boolean y1 = gamepad1.y;   // servo4 toggle (driver)
-        boolean left2 = gamepad2.dpad_left, right2 = gamepad2.dpad_right;
 
         // Intake: RT toggles forward, LT toggles reverse. Pressing one cancels the other.
         if (rt2 && !lastRT2) {
@@ -520,7 +544,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
             intakeReverse = !intakeReverse;
             if (intakeReverse) intakeOn = false;
         }
-        // D-pad left / right: each shooter on its own.
+        // Shooter on/off: each shooter on its own.
         if (left2 && !lastLeft2) {
             shooterLeftOn = !shooterLeftOn;
         }
@@ -544,30 +568,20 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         if (y1 && !lastY1) {
             servo4Open = !servo4Open;
         }
-        // LEFT shooter speed: D-pad up = +RPM_STEP, D-pad down = -RPM_STEP.
-        // Stops at MIN_RPM / SHOOTER_MAX_RPM.
+        // LEFT shooter motor speed (+/- RPM_STEP). Stops at MIN_RPM / SHOOTER_MAX_RPM.
         if (up && !lastUp) {
             targetRpmLeft = Math.min(targetRpmLeft + RPM_STEP, SHOOTER_MAX_RPM);
         }
         if (down && !lastDown) {
             targetRpmLeft = Math.max(targetRpmLeft - RPM_STEP, MIN_RPM);
         }
-        // RIGHT shooter speed: B = +RPM_STEP, X = -RPM_STEP.
+        // RIGHT shooter motor speed (+/- RPM_STEP).
         if (b2 && !lastB2) {
             targetRpmRight = Math.min(targetRpmRight + RPM_STEP, SHOOTER_MAX_RPM);
         }
         if (x2 && !lastX2) {
             targetRpmRight = Math.max(targetRpmRight - RPM_STEP, MIN_RPM);
         }
-
-        boolean left = gamepad1.dpad_left, right = gamepad1.dpad_right;
-        if (left && !lastLeft) {
-            driveBalance = Math.min(driveBalance + DRIVE_BALANCE_STEP, DRIVE_BALANCE_MAX);
-        }
-        if (right && !lastRight) {
-            driveBalance = Math.max(driveBalance - DRIVE_BALANCE_STEP, -DRIVE_BALANCE_MAX);
-        }
-        lastLeft = left; lastRight = right;
 
         // Prism lights: gamepad1 right bumper flips them on/off.
         // Only talks to the Prism on the press, so it doesn't slow the loop.
@@ -589,13 +603,48 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
         lastRSB2 = rsb2;
 
+        // Second Prism strip: gamepad2 Start swaps red <-> blue.
+        boolean start2 = gamepad2.start;
+        if (start2 && !lastStart2) {
+            strip2Blue = !strip2Blue;
+            strip2Solid.setPrimaryColor(strip2Blue ? Color.BLUE : Color.RED);
+            // While the siren is running, the new color waits and shows when the siren ends.
+            if (lightsOn && !alertActive) {
+                prism.insertAndUpdateAnimation(LayerHeight.LAYER_1, strip2Solid);
+            }
+        }
+        lastStart2 = start2;
+
+        // ALERT: gamepad2 left stick click = siren on strip 2 + intake reverse for ALERT_SEC.
+        // Pressing it again while it's running does nothing.
+        boolean lsb2 = gamepad2.left_stick_button;
+        if (lsb2 && !lastLSB2 && !alertActive) {
+            alertActive = true;
+            alertTimer.reset();
+            if (lightsOn) {
+                prism.insertAndUpdateAnimation(LayerHeight.LAYER_1, stripSiren);
+            }
+        }
+        lastLSB2 = lsb2;
+
         lastRT2 = rt2; lastLT2 = lt2; lastUp = up; lastDown = down; lastRB = rb; lastLB = lb; lastA2 = a2;
         lastB2 = b2; lastX2 = x2; lastY1 = y1; lastLeft2 = left2; lastRight2 = right2;
     }
 
     // ---------------- Apply mechanism outputs ----------------
     private void runMechanisms() {
-        double intakePower = intakeOn ? INTAKE_POWER : intakeReverse ? -INTAKE_POWER : 0;
+        // ALERT ends after ALERT_SEC: strip 2 goes back to its red/blue color,
+        // and the intake goes back to whatever RT/LT had it set to.
+        if (alertActive && alertTimer.seconds() >= ALERT_SEC) {
+            alertActive = false;
+            if (lightsOn) {
+                prism.insertAndUpdateAnimation(LayerHeight.LAYER_1, strip2Solid);
+            }
+        }
+
+        double intakePower = alertActive ? -INTAKE_POWER                 // ALERT overrides the triggers
+                : intakeOn    ?  INTAKE_POWER
+                : intakeReverse ? -INTAKE_POWER : 0;
         intakeLeft.setPower(intakePower);
         intakeRight.setPower(intakePower);
 
@@ -634,25 +683,20 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     // ---------------- Prism LED lights ----------------
     // Gives each daisy-chained strip its own LED range and animation.
     private void setupLights() {
-        PrismAnimations.AnimationBase[] anims = {stripSolid, stripSiren, stripRainbow, stripScanner};
+        PrismAnimations.AnimationBase[] anims = {stripSolid, strip2Solid, nectarStrip.solid, pollenStrip.solid};
 
         // Strip 1: solid color, starts RED (gamepad2 right stick button cycles it)
         stripSolid.setPrimaryColor(STRIP1_COLORS[0]);
 
-        // Strip 2: siren (red / white / blue police lights)
+        // Strip 2: solid RED to start (gamepad2 Start swaps red/blue).
+        // The siren below only shows during the ALERT (gamepad2 left stick click).
+        strip2Solid.setPrimaryColor(Color.RED);
+
+        // Strip 2 ALERT: siren (red / white / blue police lights)
         stripSiren.setPoliceLightsStyle(PrismAnimations.PoliceLights.PoliceLightsStyle.Style1);
         stripSiren.setPeriod(500);          // ms per loop; lower = faster flashing
 
-        // Strip 3: rainbow snakes chasing down the strip
-        stripRainbow.setNumberOfSnakes(2);
-        stripRainbow.setSnakeLength(3);
-        stripRainbow.setSpacingBetween(3);
-        stripRainbow.setSpeed(0.5f);
-
-        // Strip 4: "Knight Rider" scanner bouncing back and forth
-        stripScanner.setEyeWidth(1);
-        stripScanner.setTrailWidth(2);
-        stripScanner.setSpeed(0.5f);
+        // Strips 3 and 4: shooter RPM colors are handled by RpmStrip (updated every loop).
 
         int start = 0;
         for (int i = 0; i < anims.length; i++) {
@@ -662,14 +706,102 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
             anims[i].setBrightness(LED_BRIGHTNESS);
             start = stop + 1;
         }
+
+        // The siren lives on the same LEDs as strip 2's solid color.
+        stripSiren.setStartIndex(strip2Solid.getStartIndex());
+        stripSiren.setStopIndex(strip2Solid.getStopIndex());
+        stripSiren.setBrightness(LED_BRIGHTNESS);
+
+        // Strips 3/4: siren + special go on the same LEDs as their solid color.
+        nectarStrip.finishSetup();
+        pollenStrip.finishSetup();
+    }
+
+    // ---- Strips 3 & 4: one shooter's target RPM -> color ----
+    // <2200 SIREN, 2200 RED, 2300 ORANGE, 2400 GREEN, 2500 BLUE, 2600 WHITE, >2600 SPECIAL rainbow
+    private static final int RPM_LIGHT_SIREN   = -1;   // below the lowest step
+    private static final int RPM_LIGHT_SPECIAL = 99;   // above the highest step
+
+    private class RpmStrip {
+        final PrismAnimations.Solid        solid   = new PrismAnimations.Solid(Color.GREEN);
+        final PrismAnimations.PoliceLights siren   = new PrismAnimations.PoliceLights();
+        final PrismAnimations.Rainbow      special = new PrismAnimations.Rainbow();
+        final LayerHeight layer;
+        final boolean usesLeftShooter;
+        int index = -2;   // what it's showing (-2 = not decided yet)
+
+        RpmStrip(LayerHeight layer, boolean usesLeftShooter, int ledCount) {
+            this.layer = layer;
+            this.usesLeftShooter = usesLeftShooter;
+            siren.setPoliceLightsStyle(PrismAnimations.PoliceLights.PoliceLightsStyle.Style1);
+            siren.setPeriod(500);
+            special.setSpeed(0.9f);           // fast; 0-1, raise for faster
+            special.setRepeatAfter(ledCount); // one full rainbow across the strip
+        }
+
+        // Call after solid's start/stop indexes are set.
+        void finishSetup() {
+            for (PrismAnimations.AnimationBase a : new PrismAnimations.AnimationBase[]{siren, special}) {
+                a.setStartIndex(solid.getStartIndex());
+                a.setStopIndex(solid.getStopIndex());
+                a.setBrightness(LED_BRIGHTNESS);
+            }
+            index = rpmToIndex(targetRpm());
+            applyColor();
+        }
+
+        double targetRpm() {
+            return usesLeftShooter ? targetRpmLeft : targetRpmRight;
+        }
+
+        int rpmToIndex(double rpm) {
+            if (rpm < RPM_LIGHT_STEPS[0]) return RPM_LIGHT_SIREN;
+            if (rpm > RPM_LIGHT_STEPS[RPM_LIGHT_STEPS.length - 1]) return RPM_LIGHT_SPECIAL;
+            int i2 = 0;
+            for (int i = 0; i < RPM_LIGHT_STEPS.length; i++) {
+                if (rpm >= RPM_LIGHT_STEPS[i]) i2 = i;
+            }
+            return i2;
+        }
+
+        void applyColor() {
+            if (index >= 0 && index < RPM_LIGHT_COLORS.length) {
+                solid.setPrimaryColor(RPM_LIGHT_COLORS[index]);
+            }
+        }
+
+        // The animation this strip should be running right now.
+        PrismAnimations.AnimationBase current() {
+            if (index == RPM_LIGHT_SIREN)   return siren;
+            if (index == RPM_LIGHT_SPECIAL) return special;
+            return solid;
+        }
+
+        String name() {
+            if (index == RPM_LIGHT_SIREN)   return "SIREN";
+            if (index == RPM_LIGHT_SPECIAL) return "SPECIAL (rainbow)";
+            return RPM_LIGHT_NAMES[index];
+        }
+
+        // Called every loop, but only talks to the Prism when the color actually changes.
+        void update() {
+            int newIndex = rpmToIndex(targetRpm());
+            if (newIndex != index) {
+                index = newIndex;
+                applyColor();
+                if (lightsOn) {
+                    prism.insertAndUpdateAnimation(layer, current());
+                }
+            }
+        }
     }
 
     private void setLights(boolean on) {
         if (on) {
             prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, stripSolid);
-            prism.insertAndUpdateAnimation(LayerHeight.LAYER_1, stripSiren);
-            prism.insertAndUpdateAnimation(LayerHeight.LAYER_2, stripRainbow);
-            prism.insertAndUpdateAnimation(LayerHeight.LAYER_3, stripScanner);
+            prism.insertAndUpdateAnimation(LayerHeight.LAYER_1, alertActive ? stripSiren : strip2Solid);
+            prism.insertAndUpdateAnimation(LayerHeight.LAYER_2, nectarStrip.current());
+            prism.insertAndUpdateAnimation(LayerHeight.LAYER_3, pollenStrip.current());
             rgbLight.setPosition(RGB_RED);   // readyFeedback() takes over from here
         } else {
             prism.clearAllAnimations();
@@ -744,7 +876,6 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
     }
 
-    private long lastLoopNs = System.nanoTime();
     private double minVolts = 99;
 
     private double batteryVoltage() {
@@ -756,55 +887,20 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         return v == Double.POSITIVE_INFINITY ? 0 : v;
     }
 
+    // Telemetry: battery voltage and the two shooter RPMs only.
     private void updateTelemetry() {
-        long now = System.nanoTime();
-        telemetry.addData("Loop time (ms)", "%.1f", (now - lastLoopNs) / 1e6);
-        lastLoopNs = now;
-        // ---- Battery (lowest hub reading; watch for sag while driving) ----
         double volts = batteryVoltage();
         if (volts > 0) minVolts = Math.min(minVolts, volts);
         telemetry.addData("Battery", "%.2f V   (lowest this run: %.2f V)", volts, minVolts);
 
-        // ---- Drive diagnostics (remove once driving is sorted) ----
-        telemetry.addData("Stick LX / LY / RX", "%.2f / %.2f / %.2f",
-                gamepad1.left_stick_x, -gamepad1.left_stick_y, gamepad1.right_stick_x);
-        telemetry.addData("Power FL / FR", "%.2f / %.2f", frontLeft.getPower(), frontRight.getPower());
-        telemetry.addData("Power BL / BR", "%.2f / %.2f", backLeft.getPower(), backRight.getPower());
-
-        telemetry.addData("Heading (deg)", "%.1f",
-                imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES));
-        telemetry.addData("Drive balance", "%+.2f  (%s)", driveBalance,
-                driveBalance > 0 ? "left side slowed" : driveBalance < 0 ? "right side slowed" : "even");
-        telemetry.addData("Heading hold", holding
-                ? String.format("ON @ %.1f°", Math.toDegrees(holdHeading)) : "off");
-        telemetry.addData("Snap", !snapping ? "off"
-                : snapOnTarget ? "LOCKED @ " + SNAP_HEADING_DEG + "°"
-                : "turning to " + SNAP_HEADING_DEG + "°");
-        telemetry.addData("Shake", shaking ? "SHAKING" : "off  (GP2 Y)");
-        telemetry.addData("Lights", lightsOn ? "ON  (GP1 RB)" : "OFF  (GP1 RB)");
-        telemetry.addData("Strip 1 color", "%s  (GP2 right stick click)", STRIP1_COLOR_NAMES[strip1ColorIndex]);
-        telemetry.addData("Intake", "%s  (GP2 RT / LT)", intakeOn ? "ON" : intakeReverse ? "REVERSE" : "OFF");
-        telemetry.addData("Servo1", "%s  (pos %.2f)",
-                servo1Out ? String.format("OUT, returning in %.1fs",
-                        Math.max(0, SERVO1_HOLD_SEC - servo1Timer.seconds())) : "HOME",
-                servo1.getPosition());
-        telemetry.addData("Servo2", "%s  (pos %.2f)",
-                servo2Out ? String.format("OUT, returning in %.1fs",
-                        Math.max(0, SERVO2_HOLD_SEC - servo2Timer.seconds())) : "HOME",
-                servo2.getPosition());
-        telemetry.addData("Servo3", "%s  (pos %.2f)",
-                servo3Up ? String.format("UP, returning in %.1fs",
-                        Math.max(0, SERVO3_HOLD_SEC - servo3Timer.seconds())) : "HOME",
-                servo3.getPosition());
-        telemetry.addData("Servo4", "%s  (pos %.2f)",
-                servo4Open ? "DOWN" : "UP", servo4.getPosition());
-        telemetry.addData("Shooters", "LEFT %s  /  RIGHT %s",
-                shooterLeftOn ? "ON" : "OFF", shooterRightOn ? "ON" : "OFF");
-        telemetry.addData("Left RPM",  "%.0f / target %.0f  (D-pad up/down)",
-                Math.abs(ticksPerSecToRpm(shooterLeft.getVelocity())), targetRpmLeft);
-        telemetry.addData("Right RPM", "%.0f / target %.0f  (B up / X down)",
-                Math.abs(ticksPerSecToRpm(shooterRight.getVelocity())), targetRpmRight);
-        telemetry.addData("READY TO FIRE", shootersReady() ? ">>> YES <<<" : "no");
+        double leftRpm  = Math.abs(ticksPerSecToRpm(shooterLeft.getVelocity()));
+        double rightRpm = Math.abs(ticksPerSecToRpm(shooterRight.getVelocity()));
+        double nectarRpm    = NECTAR_IS_LEFT_SHOOTER ? leftRpm  : rightRpm;
+        double pollenRpm    = NECTAR_IS_LEFT_SHOOTER ? rightRpm : leftRpm;
+        double nectarTarget = NECTAR_IS_LEFT_SHOOTER ? targetRpmLeft  : targetRpmRight;
+        double pollenTarget = NECTAR_IS_LEFT_SHOOTER ? targetRpmRight : targetRpmLeft;
+        telemetry.addData("POLLEN RPM", "%.0f / target %.0f", pollenRpm, pollenTarget);
+        telemetry.addData("NECTAR RPM", "%.0f / target %.0f", nectarRpm, nectarTarget);
         telemetry.update();
     }
 
