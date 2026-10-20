@@ -5,6 +5,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.DigitalChannel;
 import com.qualcomm.robotcore.hardware.DistanceSensor;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.IMU;
@@ -53,8 +54,9 @@ import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
  *     Right trigger: toggle intake FORWARD (pull in) ON/OFF
  *     Left trigger : toggle intake REVERSE (spit out) ON/OFF
  *     D-pad right  : SHAKE: robot strafes left/right quickly for SHAKE_TIME_SEC to unstick balls
- *     Right stick button (press the stick down): first Prism strip color:
- *                  RED -> GREEN -> BLUE -> WHITE -> back to RED
+ *     Right stick button (press the stick down): manually steps the LIMIT SWITCH COUNT
+ *                  (and first Prism strip color): 0 OFF -> 1 RED -> 2 GREEN -> 3 BLUE -> 4 WHITE -> back to 0 OFF
+ *                  (from 4 or higher, one press resets to 0)
  *     Start        : second Prism strip: swaps RED <-> BLUE (starts RED)
  *                  This is also OUR BALL COLOR for color sorting (see below).
  *                  (don't press Start together with A or B; that combo re-binds the gamepad)
@@ -74,6 +76,15 @@ import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
  *   If the wrong ball is still in front of the sensor when the alert ends, it fires again.
  *   Set COLOR_SORT_ON = false to turn it off completely.
  *
+ * LIMIT SWITCH (automatic) -> drives the FIRST Prism strip color
+ *   TWO switches (limit1 + limit2) share ONE count. A press on EITHER switch adds 1
+ *     (limit1 then limit2 = 2). Each switch only counts once per press, even if held.
+ *   Count starts at LIMIT_START_COUNT (0 = no balls):
+ *     0 = OFF (strip dark, no balls), 1 = RED, 2 = GREEN, 3 = BLUE, 4 = WHITE.
+ *     It keeps counting past 4 (5, 6, 7...); the strip stays WHITE for 4 and up.
+ *   Gamepad2 right stick button steps the count by hand (from 4 or higher it goes back to 0, so it's also the reset).
+ *   Holding the switch down only counts once. Counts only while the OpMode is running (not during INIT).
+ *
  * HARDWARE CONFIG NAMES (must match the Driver Station config exactly)
  *   FLM (front left motor), FRM (front right motor),
  *   BLM (back left motor),  BRM (back right motor),
@@ -86,6 +97,12 @@ import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
  *   color2 (REV Color Sensor V3, EXPANSION HUB I2C bus 0)
  *     These are I2C sensors - they do NOT work in the digital ports.
  *     Two REV V3 sensors can NOT share a bus (same I2C address) - one sensor per bus.
+ *   limit1 (goBILDA micro limit switch, Control Hub DIGITAL port 0, configured as "Digital Device")
+ *   limit2 (goBILDA micro limit switch, Control Hub DIGITAL port 2, configured as "Digital Device")
+ *     Each switch on its own 4-pin digital connector (limit1 on the "0-1" connector, limit2 on "2-3").
+ *     Wiring to the 4-pin digital port (GND, 3.3V, n+1, n):
+ *       COM -> pin 4 (channel n)    NO -> GND    NC -> 3.3V
+ *     Released = HIGH, pressed = LOW.
  *   rgblight (goBILDA RGB Indicator Light, servo port, configured as "Servo")
  *     Always solid RED while the OpMode runs.
  *
@@ -232,6 +249,17 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private static final float    BLUE_HUE_MIN        = 190;
     private static final float    BLUE_HUE_MAX        = 260;
 
+    // ---- Limit switches (goBILDA micro limit switches, digital ports "limit1" + "limit2") ----
+    // Both switches add to ONE shared count.
+    // Wiring: COM -> signal (pin 4), NO -> GND, NC -> 3.3V. Pressed = LOW.
+    // If the count goes up when you RELEASE instead of press, set LIMIT_PRESSED_IS_LOW = false.
+    // If telemetry says PRESSED all the time, COM is on the wrong pin (move it to pin 4).
+    private static final String[] LIMIT_SWITCH_NAMES  = {"limit1", "limit2"};
+    private static final boolean LIMIT_PRESSED_IS_LOW = true;
+    private static final double  LIMIT_DEBOUNCE_SEC   = 0.02;  // ignore contact bounce for 20 ms; lower to 0.01 if fast hits get missed
+    // The count IS the first strip's color: 0 = OFF (no balls), 1-4 = STRIP1_COLORS (RED, GREEN, BLUE, WHITE).
+    private static final int     LIMIT_START_COUNT    = 0;     // count at the start of the match (0-4); set 3 if you preload 3
+
     // ---- Prism LED lights (gamepad1 Right bumper) ----
     // The 4 strips are daisy-chained, so the Prism sees ONE long string of LEDs.
     // List each strip's LED count IN THE ORDER THEY ARE CHAINED, starting from the
@@ -241,7 +269,9 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private static final int   LED_BRIGHTNESS  = 60;     // 0-100
     private static final boolean LIGHTS_START_ON = true;
 
-    // First strip in the chain cycles through these on gamepad2 right stick button. Starts on the first one.
+    // First strip in the chain = LIMIT SWITCH COUNT. Count 0 = strip dark (no balls),
+    // count 1 = first color here, count 4 AND ABOVE = last color here.
+    // Limit switch presses and gamepad2 right stick button both step through these.
     private static final Color[]  STRIP1_COLORS      = {Color.RED, Color.GREEN, Color.BLUE, Color.WHITE};
     private static final String[] STRIP1_COLOR_NAMES = {"RED", "GREEN", "BLUE", "WHITE"};
 
@@ -283,6 +313,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private List<LynxModule> hubs;
     private GoBildaPrismDriver prism;
     private NormalizedColorSensor[] colorSensors;
+    private DigitalChannel[] limitSwitches;
 
     // One animation per strip
     private final PrismAnimations.Solid         stripSolid  = new PrismAnimations.Solid(Color.RED);
@@ -293,7 +324,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private final RpmStrip pollenStrip = new RpmStrip(LayerHeight.LAYER_3, !NECTAR_IS_LEFT_SHOOTER, STRIP_LEDS[3]);
     private boolean lightsOn = false;
     private boolean lastRB1;
-    private int strip1ColorIndex = 0;   // 0 = RED
+    private int limitCount = LIMIT_START_COUNT;   // 0 = no balls (strip 1 dark), 1-4 = RED/GREEN/BLUE/WHITE
     private boolean lastRT2, lastLT2, lastRSB2, lastStart2, lastLSB2;
     private boolean strip2Blue = false;     // false = RED, true = BLUE  (also = our ball color)
     private boolean alertActive = false;    // siren + reverse intake running
@@ -306,6 +337,12 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private float[]     sensorHue, sensorSat;
     private double[]    sensorDist;
     private String      lastSortEvent = "none yet";
+
+    // ---- Limit switch state ----
+    // (the count itself is limitCount, which also drives strip 1, so the light and the count can never disagree)
+    // One entry per switch: debounced state + its own debounce timer.
+    private boolean[]     limitWasPressed;
+    private ElapsedTime[] limitDebounce;
 
     // ---- State ----
     private double targetRpmLeft  = START_RPM_LEFT;   // current left shooter target
@@ -353,6 +390,17 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         rgbLight     = hardwareMap.get(ServoImplEx.class, "rgblight");
         rgbLight.setPwmEnable();
         rgbLight.setPosition(RGB_RED);   // solid red, always
+
+        // Limit switches: plain digital inputs, all feeding one shared count.
+        int ls = LIMIT_SWITCH_NAMES.length;
+        limitSwitches   = new DigitalChannel[ls];
+        limitWasPressed = new boolean[ls];
+        limitDebounce   = new ElapsedTime[ls];
+        for (int i = 0; i < ls; i++) {
+            limitSwitches[i] = hardwareMap.get(DigitalChannel.class, LIMIT_SWITCH_NAMES[i]);
+            limitSwitches[i].setMode(DigitalChannel.Mode.INPUT);
+            limitDebounce[i] = new ElapsedTime();
+        }
 
         // Color sensors: gain + turn on the sensor's white LED so colors read the same in any lighting.
         int n = COLOR_SENSOR_NAMES.length;
@@ -445,6 +493,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
             drive();
             handleToggles();
             colorSort();
+            countLimitSwitch();
             runMechanisms();
             nectarStrip.update();
             pollenStrip.update();
@@ -650,15 +699,11 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
         lastRB1 = rb1;
 
-        // First Prism strip: gamepad2 right stick button steps to the next color and loops back to red.
+        // Limit switch count (first Prism strip): gamepad2 right stick button steps it by hand,
+        // 0 -> 1 -> 2 -> 3 -> 4 -> back to 0. Use it to fix the count or reset it.
         boolean rsb2 = gamepad2.right_stick_button;
         if (rsb2 && !lastRSB2) {
-            strip1ColorIndex = (strip1ColorIndex + 1) % STRIP1_COLORS.length;
-            stripSolid.setPrimaryColor(STRIP1_COLORS[strip1ColorIndex]);
-            // Only send it if the lights are on; if they're off, the new color shows when RB turns them back on.
-            if (lightsOn) {
-                prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, stripSolid);
-            }
+            setLimitCount(limitCount >= STRIP1_COLORS.length ? 0 : limitCount + 1);
         }
         lastRSB2 = rsb2;
 
@@ -694,6 +739,59 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         if (lightsOn) {
             prism.insertAndUpdateAnimation(LayerHeight.LAYER_1, stripSiren);
         }
+    }
+
+    // ---------------- Limit switch press counter ----------------
+    // Each NEW press (not while held) adds 1 to the count:
+    // 0 OFF -> 1 RED -> 2 GREEN -> 3 BLUE -> 4 WHITE -> 5, 6, 7... (still WHITE).
+    // The debounce timer ignores the few milliseconds of contact bounce so one press never counts as 2 or 3.
+    // Both switches feed the same count: limit1 press then limit2 press = 2.
+    private void countLimitSwitch() {
+        for (int i = 0; i < limitSwitches.length; i++) {
+            boolean pressed = limitSwitches[i].getState() != LIMIT_PRESSED_IS_LOW;
+            if (pressed != limitWasPressed[i] && limitDebounce[i].seconds() >= LIMIT_DEBOUNCE_SEC) {
+                if (pressed) {
+                    addBall();
+                }
+                limitWasPressed[i] = pressed;
+                limitDebounce[i].reset();
+            }
+        }
+    }
+
+    // One ball counted (from either switch). No upper limit.
+    private void addBall() {
+        setLimitCount(limitCount + 1);
+    }
+
+    // Which STRIP1_COLORS entry the count shows: 1-4 map directly, anything above 4 uses the last (WHITE).
+    private int strip1ColorFor(int count) {
+        return Math.min(count, STRIP1_COLORS.length) - 1;
+    }
+
+    // Sets the count (0-4) and updates the first strip. Only talks to the Prism when it changes.
+    private void setLimitCount(int count) {
+        if (count == limitCount) return;
+        limitCount = count;
+        applyStrip1();
+    }
+
+    // Count 0 = strip dark (brightness 0). Count 1-4 = that color at normal brightness.
+    // Only sends to the Prism if the lights are on; if they're off, it shows when RB turns them back on.
+    private void applyStrip1() {
+        if (limitCount <= 0) {
+            stripSolid.setBrightness(0);
+        } else {
+            stripSolid.setBrightness(LED_BRIGHTNESS);
+            stripSolid.setPrimaryColor(STRIP1_COLORS[strip1ColorFor(limitCount)]);
+        }
+        if (lightsOn) {
+            prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, stripSolid);
+        }
+    }
+
+    private String limitCountName() {
+        return limitCount <= 0 ? "OFF - no balls" : STRIP1_COLOR_NAMES[strip1ColorFor(limitCount)];
     }
 
     // ---------------- Color sorting ----------------
@@ -828,6 +926,9 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         stripSiren.setStartIndex(strip2Solid.getStartIndex());
         stripSiren.setStopIndex(strip2Solid.getStopIndex());
         stripSiren.setBrightness(LED_BRIGHTNESS);
+
+        // Strip 1 shows the starting limit switch count (0 = dark).
+        applyStrip1();
 
         // Strips 3/4: siren + special go on the same LEDs as their solid color.
         nectarStrip.finishSetup();
@@ -992,7 +1093,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         return v == Double.POSITIVE_INFINITY ? 0 : v;
     }
 
-    // Telemetry: battery, shooter RPMs, and color sorting.
+    // Telemetry: battery, shooter RPMs, color sorting, and limit switch count.
     private void updateTelemetry() {
         double volts = batteryVoltage();
         if (volts > 0) minVolts = Math.min(minVolts, volts);
@@ -1006,6 +1107,11 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         double pollenTarget = NECTAR_IS_LEFT_SHOOTER ? targetRpmRight : targetRpmLeft;
         telemetry.addData("POLLEN RPM", "%.0f / target %.0f", pollenRpm, pollenTarget);
         telemetry.addData("NECTAR RPM", "%.0f / target %.0f", nectarRpm, nectarTarget);
+
+        telemetry.addData("Ball count", "%d (%s)", limitCount, limitCountName());
+        for (int i = 0; i < limitSwitches.length; i++) {
+            telemetry.addData("Switch " + LIMIT_SWITCH_NAMES[i], limitWasPressed[i] ? "PRESSED" : "released");
+        }
 
         telemetry.addData("Our color (light 2)", strip2Blue ? "BLUE" : "RED");
         for (int i = 0; i < colorSensors.length; i++) {
