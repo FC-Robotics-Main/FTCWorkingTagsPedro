@@ -5,17 +5,21 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.DistanceSensor;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.IMU;
-import com.qualcomm.robotcore.hardware.PwmControl;
+import com.qualcomm.robotcore.hardware.NormalizedColorSensor;
+import com.qualcomm.robotcore.hardware.NormalizedRGBA;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.hardware.ServoImplEx;
+import com.qualcomm.robotcore.hardware.SwitchableLight;
 import com.qualcomm.robotcore.hardware.VoltageSensor;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.hardware.lynx.LynxModule;
 import java.util.List;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.teamcode.Prism.Color;
 import org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver;
 import org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver.LayerHeight;
@@ -33,7 +37,7 @@ import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
  *                  while you strafe; moving the right stick cancels it)
  *   Y            : SERVO4 toggle: starts UP, press to swing DOWN 88 degrees, press again to go back UP
  *   Left bumper  : hold for slow drive (precision)
- *   Right bumper : toggle ALL lights ON/OFF (Prism strips + rgblight; they start ON)
+ *   Right bumper : toggle Prism strips ON/OFF (they start ON). The rgblight is always red.
  *
  * GAMEPAD 2 — OPERATOR
  *   LEFT SIDE = POLLEN shooter
@@ -52,14 +56,23 @@ import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
  *     Right stick button (press the stick down): first Prism strip color:
  *                  RED -> GREEN -> BLUE -> WHITE -> back to RED
  *     Start        : second Prism strip: swaps RED <-> BLUE (starts RED)
+ *                  This is also OUR BALL COLOR for color sorting (see below).
  *                  (don't press Start together with A or B; that combo re-binds the gamepad)
  *     Left stick button (press the stick down): ALERT: second strip runs the siren AND the
  *                  intake runs in REVERSE for ALERT_SEC (3s), then both go back to how they were
- *   Rumble/LED   : flywheel "ready to fire" feedback
+ *   Rumble/LED   : flywheel "ready to fire" feedback (gamepad only)
  *   Prism strip 3: NECTAR shooter target RPM.  Prism strip 4: POLLEN shooter target RPM.
  *                  (set which shooter is which with NECTAR_IS_LEFT_SHOOTER)
  *                  <2200 SIREN, 2200 RED, 2300 ORANGE, 2400 GREEN, 2500 BLUE, 2600 WHITE,
  *                  >2600 SPECIAL (fast full rainbow)
+ *
+ * COLOR SORTING (automatic)
+ *   Light 2 RED  + sensor sees RED ball  -> nothing
+ *   Light 2 RED  + sensor sees BLUE ball -> ALERT (siren on light 2 + intake reverse for ALERT_SEC)
+ *   Light 2 BLUE + sensor sees BLUE ball -> nothing
+ *   Light 2 BLUE + sensor sees RED ball  -> ALERT
+ *   If the wrong ball is still in front of the sensor when the alert ends, it fires again.
+ *   Set COLOR_SORT_ON = false to turn it off completely.
  *
  * HARDWARE CONFIG NAMES (must match the Driver Station config exactly)
  *   FLM (front left motor), FRM (front right motor),
@@ -69,8 +82,12 @@ import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
  *   servo1, servo2, servo3, servo4 (servo ports, configured as "Servo")
  *   imu (the Control Hub's built-in IMU, I2C bus 0; usually already in the config)
  *   prism (goBILDA Prism RGB LED Driver, Control Hub I2C bus 1)
+ *   color1 (REV Color Sensor V3, CONTROL HUB I2C bus 2)
+ *   color2 (REV Color Sensor V3, EXPANSION HUB I2C bus 0)
+ *     These are I2C sensors - they do NOT work in the digital ports.
+ *     Two REV V3 sensors can NOT share a bus (same I2C address) - one sensor per bus.
  *   rgblight (goBILDA RGB Indicator Light, servo port, configured as "Servo")
- *     RED = shooters off, YELLOW = spinning up, GREEN = ready to fire
+ *     Always solid RED while the OpMode runs.
  *
  * PRISM LIGHTS NEED the goBILDA driver files in TeamCode/.../teamcode/Prism/
  *   (Color.java, Direction.java, GoBildaPrismDriver.java, PrismAnimations.java)
@@ -199,6 +216,22 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private static final double SNAP_MIN_POWER     = 0.06;  // overcomes friction near the target
     private static final double SNAP_TOLERANCE_DEG = 1.5;   // "close enough" window
 
+    // ---- Color sorting ----
+    // Light 2's color (gamepad2 Start) is OUR color. The OTHER color triggers the ALERT
+    // (siren on light 2 + intake reverse for ALERT_SEC).
+    // Tune with the telemetry lines "Sensor color1 ...": hold a red ball, then a blue ball,
+    // in front of the sensor and read the hue/sat/dist numbers.
+    private static final boolean  COLOR_SORT_ON       = true;
+    private static final String[] COLOR_SENSOR_NAMES  = {"color1", "color2"};  // either one seeing the wrong color triggers the alert
+    private static final float    COLOR_GAIN          = 2.0f;   // raise if readings are dim / sat is low
+    private static final double   BALL_DISTANCE_CM    = 4.0;    // ball counts as "there" if closer than this
+    private static final float    MIN_SATURATION      = 0.35f;  // below this = gray/white/empty, ignored
+    // Hue is 0-360. Red wraps around 0, so red = hue below RED_HUE_LOW OR above RED_HUE_HIGH.
+    private static final float    RED_HUE_LOW         = 30;
+    private static final float    RED_HUE_HIGH        = 330;
+    private static final float    BLUE_HUE_MIN        = 190;
+    private static final float    BLUE_HUE_MAX        = 260;
+
     // ---- Prism LED lights (gamepad1 Right bumper) ----
     // The 4 strips are daisy-chained, so the Prism sees ONE long string of LEDs.
     // List each strip's LED count IN THE ORDER THEY ARE CHAINED, starting from the
@@ -227,11 +260,10 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private static final String[] RPM_LIGHT_NAMES  = {"RED", "ORANGE", "GREEN", "BLUE", "WHITE"};
 
     // ---- goBILDA RGB Indicator Light (servo port) ----
-    // setPosition() picks the color. Do NOT reverse this servo or colors come out wrong.
-    private static final double RGB_OFF    = 0.000;
-    private static final double RGB_RED    = 0.277;
-    private static final double RGB_YELLOW = 0.388;
-    private static final double RGB_GREEN  = 0.500;
+    // Always solid RED. 0.277 is goBILDA's red value for the FTC DEFAULT servo
+    // pulse range (600-2400us), so do NOT call setPwmRange() on this light.
+    // Do NOT reverse this servo or the color comes out wrong.
+    private static final double RGB_RED = 0.277;
 
     // ---- Control Hub mounting (MUST match how the hub sits on YOUR robot) ----
     // LOGO = which way the REV logo on the hub faces.
@@ -250,6 +282,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private IMU imu;
     private List<LynxModule> hubs;
     private GoBildaPrismDriver prism;
+    private NormalizedColorSensor[] colorSensors;
 
     // One animation per strip
     private final PrismAnimations.Solid         stripSolid  = new PrismAnimations.Solid(Color.RED);
@@ -262,10 +295,17 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private boolean lastRB1;
     private int strip1ColorIndex = 0;   // 0 = RED
     private boolean lastRT2, lastLT2, lastRSB2, lastStart2, lastLSB2;
-    private boolean strip2Blue = false;     // false = RED, true = BLUE
+    private boolean strip2Blue = false;     // false = RED, true = BLUE  (also = our ball color)
     private boolean alertActive = false;    // siren + reverse intake running
     private final ElapsedTime alertTimer = new ElapsedTime();
     private static final double TRIGGER_PRESSED = 0.5;  // trigger counts as "pressed" past halfway
+
+    // ---- Color sensor state ----
+    private enum BallColor { NONE, RED, BLUE }
+    private BallColor[] sensorColor;   // what each sensor sees this loop
+    private float[]     sensorHue, sensorSat;
+    private double[]    sensorDist;
+    private String      lastSortEvent = "none yet";
 
     // ---- State ----
     private double targetRpmLeft  = START_RPM_LEFT;   // current left shooter target
@@ -311,9 +351,24 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         servo3       = hardwareMap.get(Servo.class, "servo3");
         servo4       = hardwareMap.get(Servo.class, "servo4");
         rgbLight     = hardwareMap.get(ServoImplEx.class, "rgblight");
-        rgbLight.setPwmRange(new PwmControl.PwmRange(500, 2500)); // goBILDA color chart uses 500-2500us
         rgbLight.setPwmEnable();
-        rgbLight.setPosition(RGB_RED);   // red at init: shooters off
+        rgbLight.setPosition(RGB_RED);   // solid red, always
+
+        // Color sensors: gain + turn on the sensor's white LED so colors read the same in any lighting.
+        int n = COLOR_SENSOR_NAMES.length;
+        colorSensors = new NormalizedColorSensor[n];
+        sensorColor  = new BallColor[n];
+        sensorHue    = new float[n];
+        sensorSat    = new float[n];
+        sensorDist   = new double[n];
+        for (int i = 0; i < n; i++) {
+            colorSensors[i] = hardwareMap.get(NormalizedColorSensor.class, COLOR_SENSOR_NAMES[i]);
+            colorSensors[i].setGain(COLOR_GAIN);
+            if (colorSensors[i] instanceof SwitchableLight) {
+                ((SwitchableLight) colorSensors[i]).enableLight(true);
+            }
+            sensorColor[i] = BallColor.NONE;
+        }
 
         // Bulk reads: read ALL motor data from each hub in one call per loop
         // instead of one call per motor. Makes the loop much faster.
@@ -373,9 +428,12 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
             shooterRight.setVelocityPIDFCoefficients(SHOOTER_P, SHOOTER_I, SHOOTER_D, SHOOTER_F_RIGHT);
         }
 
-        updateTelemetry();   // show voltage + RPMs during INIT too
-
-        waitForStart();
+        // During INIT: keep reading the sensors so you can tune colors before the match starts.
+        while (!isStarted() && !isStopRequested()) {
+            readColorSensors();
+            updateTelemetry();
+            sleep(50);
+        }
 
         while (opModeIsActive()) {
             // MANUAL bulk caching: clear once at the top of every loop,
@@ -386,6 +444,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
 
             drive();
             handleToggles();
+            colorSort();
             runMechanisms();
             nectarStrip.update();
             pollenStrip.update();
@@ -603,7 +662,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
         lastRSB2 = rsb2;
 
-        // Second Prism strip: gamepad2 Start swaps red <-> blue.
+        // Second Prism strip: gamepad2 Start swaps red <-> blue (this is also our ball color).
         boolean start2 = gamepad2.start;
         if (start2 && !lastStart2) {
             strip2Blue = !strip2Blue;
@@ -618,17 +677,75 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         // ALERT: gamepad2 left stick click = siren on strip 2 + intake reverse for ALERT_SEC.
         // Pressing it again while it's running does nothing.
         boolean lsb2 = gamepad2.left_stick_button;
-        if (lsb2 && !lastLSB2 && !alertActive) {
-            alertActive = true;
-            alertTimer.reset();
-            if (lightsOn) {
-                prism.insertAndUpdateAnimation(LayerHeight.LAYER_1, stripSiren);
-            }
+        if (lsb2 && !lastLSB2) {
+            startAlert();
         }
         lastLSB2 = lsb2;
 
         lastRT2 = rt2; lastLT2 = lt2; lastUp = up; lastDown = down; lastRB = rb; lastLB = lb; lastA2 = a2;
         lastB2 = b2; lastX2 = x2; lastY1 = y1; lastLeft2 = left2; lastRight2 = right2;
+    }
+
+    // Starts the siren on strip 2 + reverse intake for ALERT_SEC. Ignored if already running.
+    private void startAlert() {
+        if (alertActive) return;
+        alertActive = true;
+        alertTimer.reset();
+        if (lightsOn) {
+            prism.insertAndUpdateAnimation(LayerHeight.LAYER_1, stripSiren);
+        }
+    }
+
+    // ---------------- Color sorting ----------------
+    // Light 2 RED  -> keep RED,  reject BLUE.
+    // Light 2 BLUE -> keep BLUE, reject RED.
+    private void colorSort() {
+        readColorSensors();
+        if (!COLOR_SORT_ON) return;
+
+        BallColor wrong = strip2Blue ? BallColor.RED : BallColor.BLUE;
+        for (int i = 0; i < sensorColor.length; i++) {
+            if (sensorColor[i] == wrong && !alertActive) {
+                lastSortEvent = "rejected " + wrong + " on " + COLOR_SENSOR_NAMES[i];
+                startAlert();
+                break;
+            }
+        }
+    }
+
+    private void readColorSensors() {
+        for (int i = 0; i < colorSensors.length; i++) {
+            sensorColor[i] = readBall(i);
+        }
+    }
+
+    // What color ball (if any) is in front of sensor i.
+    private BallColor readBall(int i) {
+        NormalizedColorSensor s = colorSensors[i];
+
+        // Sensors with a distance reading (REV Color Sensor V3): only judge color when a ball is close.
+        if (s instanceof DistanceSensor) {
+            sensorDist[i] = ((DistanceSensor) s).getDistance(DistanceUnit.CM);
+            if (!(sensorDist[i] < BALL_DISTANCE_CM)) {   // also catches NaN
+                sensorHue[i] = 0;
+                sensorSat[i] = 0;
+                return BallColor.NONE;
+            }
+        } else {
+            sensorDist[i] = -1;   // this sensor has no distance; saturation decides if a ball is there
+        }
+
+        NormalizedRGBA c = s.getNormalizedColors();
+        float[] hsv = new float[3];
+        android.graphics.Color.colorToHSV(c.toColor(), hsv);   // full name: our Color is the Prism one
+        sensorHue[i] = hsv[0];
+        sensorSat[i] = hsv[1];
+
+        if (hsv[1] < MIN_SATURATION) return BallColor.NONE;
+        float hue = hsv[0];
+        if (hue < RED_HUE_LOW || hue > RED_HUE_HIGH)      return BallColor.RED;
+        if (hue >= BLUE_HUE_MIN && hue <= BLUE_HUE_MAX)   return BallColor.BLUE;
+        return BallColor.NONE;
     }
 
     // ---------------- Apply mechanism outputs ----------------
@@ -689,7 +806,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         stripSolid.setPrimaryColor(STRIP1_COLORS[0]);
 
         // Strip 2: solid RED to start (gamepad2 Start swaps red/blue).
-        // The siren below only shows during the ALERT (gamepad2 left stick click).
+        // The siren below only shows during the ALERT (gamepad2 left stick click or color sort).
         strip2Solid.setPrimaryColor(Color.RED);
 
         // Strip 2 ALERT: siren (red / white / blue police lights)
@@ -796,16 +913,15 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
     }
 
+    // Turns the Prism strips on/off. The rgblight is not touched here; it stays red.
     private void setLights(boolean on) {
         if (on) {
             prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, stripSolid);
             prism.insertAndUpdateAnimation(LayerHeight.LAYER_1, alertActive ? stripSiren : strip2Solid);
             prism.insertAndUpdateAnimation(LayerHeight.LAYER_2, nectarStrip.current());
             prism.insertAndUpdateAnimation(LayerHeight.LAYER_3, pollenStrip.current());
-            rgbLight.setPosition(RGB_RED);   // readyFeedback() takes over from here
         } else {
             prism.clearAllAnimations();
-            rgbLight.setPosition(RGB_OFF);
         }
         lightsOn = on;
     }
@@ -847,6 +963,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     // Rumble: one double-buzz the moment every running shooter reaches its target RPM.
     // LED (PS4/PS5 controllers only): RED = off, YELLOW = spinning up, GREEN = ready.
     // Logitech F310 controllers have no rumble or LED; use telemetry instead.
+    // (The robot's rgblight is NOT changed here; it stays solid red.)
     private void readyFeedback() {
         boolean ready = shootersReady();
 
@@ -855,24 +972,12 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
         wasReady = ready;
 
-        // Gamepad LED and the robot's RGB light show the same thing.
         if (!shooterLeftOn && !shooterRightOn) {
             gamepad2.setLedColor(1, 0, 0, Gamepad.LED_DURATION_CONTINUOUS);
         } else if (ready) {
             gamepad2.setLedColor(0, 1, 0, Gamepad.LED_DURATION_CONTINUOUS);
         } else {
             gamepad2.setLedColor(1, 1, 0, Gamepad.LED_DURATION_CONTINUOUS);
-        }
-
-        // Robot RGB light: same colors, but only while the lights are toggled ON (GP1 RB).
-        if (!lightsOn) {
-            rgbLight.setPosition(RGB_OFF);
-        } else if (!shooterLeftOn && !shooterRightOn) {
-            rgbLight.setPosition(RGB_RED);
-        } else if (ready) {
-            rgbLight.setPosition(RGB_GREEN);
-        } else {
-            rgbLight.setPosition(RGB_YELLOW);
         }
     }
 
@@ -887,7 +992,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         return v == Double.POSITIVE_INFINITY ? 0 : v;
     }
 
-    // Telemetry: battery voltage and the two shooter RPMs only.
+    // Telemetry: battery, shooter RPMs, and color sorting.
     private void updateTelemetry() {
         double volts = batteryVoltage();
         if (volts > 0) minVolts = Math.min(minVolts, volts);
@@ -901,6 +1006,13 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         double pollenTarget = NECTAR_IS_LEFT_SHOOTER ? targetRpmRight : targetRpmLeft;
         telemetry.addData("POLLEN RPM", "%.0f / target %.0f", pollenRpm, pollenTarget);
         telemetry.addData("NECTAR RPM", "%.0f / target %.0f", nectarRpm, nectarTarget);
+
+        telemetry.addData("Our color (light 2)", strip2Blue ? "BLUE" : "RED");
+        for (int i = 0; i < colorSensors.length; i++) {
+            telemetry.addData("Sensor " + COLOR_SENSOR_NAMES[i], "%s  hue %.0f  sat %.2f  dist %.1f cm",
+                    sensorColor[i], sensorHue[i], sensorSat[i], sensorDist[i]);
+        }
+        telemetry.addData("Last sort", lastSortEvent);
         telemetry.update();
     }
 
@@ -911,6 +1023,5 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         shooterLeft.setPower(0);
         shooterRight.setPower(0);
         prism.clearAllAnimations();   // lights off when the OpMode stops
-        rgbLight.setPosition(RGB_OFF);
     }
 }
