@@ -11,6 +11,7 @@ import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.NormalizedColorSensor;
 import com.qualcomm.robotcore.hardware.NormalizedRGBA;
+import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.hardware.ServoImplEx;
 import com.qualcomm.robotcore.hardware.SwitchableLight;
@@ -18,6 +19,7 @@ import com.qualcomm.robotcore.hardware.VoltageSensor;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.hardware.lynx.LynxModule;
+import java.util.ArrayList;
 import java.util.List;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
@@ -29,30 +31,40 @@ import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
 /*
  * Mecanum drive + 2 velocity-controlled shooters + 2-motor intake + 4 servos, all mechanisms on toggles.
  *
- * GAMEPAD 1 — DRIVER (driving)
- *   Left stick   : drive. FIELD-CENTRIC: stick forward = away from the driver, no matter which
- *                  way the robot faces. Set FIELD_CENTRIC = false below to go back to robot-centric.
+ * GAMEPAD 1 — DRIVER (driving + intake)
+ *   Left stick   : drive. ROBOT-CENTRIC: stick forward = the robot's front.
+ *                  Set FIELD_CENTRIC = true below for field-centric (stick forward = away from driver).
  *   Right stick X: turn
  *   Start        : reset heading (point robot away from driver, then press)
  *   X            : toggle SNAP-TO-ANGLE (auto-turns to SNAP_HEADING_DEG and holds it
  *                  while you strafe; moving the right stick cancels it)
  *   Y            : SERVO4 toggle: starts UP, press to swing DOWN 88 degrees, press again to go back UP
+ *   D-pad right/left: SERVO4 fine-tune +1 / -1 degree per tap (adjusts whichever position it's in now)
+ *   D-pad up/down: POLLEN shooter speed +10 / -10 RPM per tap
+ *   B / A        : NECTAR shooter speed +10 / -10 RPM per tap (B = up, A = down)
+ *                  (don't press Start together with A or B; that combo re-binds the gamepad)
  *   Left bumper  : hold for slow drive (precision)
  *   Right bumper : toggle Prism strips ON/OFF (they start ON). The rgblight is always red.
+ *   Right trigger: toggle intake FORWARD (pull in) ON/OFF
+ *   Left trigger : toggle intake REVERSE (spit out) ON/OFF
  *
  * GAMEPAD 2 — OPERATOR
  *   LEFT SIDE = POLLEN shooter
- *     D-pad up/down: POLLEN speed +100 / -100 RPM per tap
- *     D-pad left   : toggle POLLEN shooter ON/OFF
+ *     D-pad left   : toggle POLLEN shooter ON/OFF  (speed is on gamepad 1)
  *     Left bumper  : SERVO2 (pollen) goes to 90 degrees, waits SERVO2_HOLD_SEC (0.3s), then returns home
  *   RIGHT SIDE = NECTAR shooter
- *     Y / A        : NECTAR speed +100 / -100 RPM per tap (Y = up, A = down)
- *     B            : toggle NECTAR shooter ON/OFF
+ *     B            : toggle NECTAR shooter ON/OFF  (speed is on gamepad 1)
  *     Right bumper : SERVO1 (nectar) opens, waits SERVO1_HOLD_SEC (0.45s), then returns home
  *     X            : SERVO3 (nectar) goes up 45 degrees, waits SERVO3_HOLD_SEC (0.55s), then returns home
+ *   FIRE GATE: pressing the button for SERVO1/2 only starts its open-wait-return cycle if THEIR
+ *     shooter is ON and its actual RPM has been within FIRE_TOLERANCE_RPM (50) of target for
+ *     FIRE_SETTLE_SEC. If the RPM isn't right, the press is ignored (short rumble on gamepad 2,
+ *     reason on telemetry "Last fire block"). Press again once it's settled.
+ *     SERVO3 is NOT gated; it always runs when pressed.
+ *   SHOT LOG (telemetry): the last 3 shots (servo1 = NECTAR, servo2 = POLLEN), newest first.
+ *     For each: RPM when fired / target, how long until it was back within +/-50 RPM,
+ *     the lowest RPM after the shot and the highest RPM (overshoot) during the recovery.
  *   Everything else
- *     Right trigger: toggle intake FORWARD (pull in) ON/OFF
- *     Left trigger : toggle intake REVERSE (spit out) ON/OFF
  *     D-pad right  : SHAKE: robot strafes left/right quickly for SHAKE_TIME_SEC to unstick balls
  *     Right stick button (press the stick down): manually steps the LIMIT SWITCH COUNT
  *                  (and first Prism strip color): 0 OFF -> 1 RED -> 2 GREEN -> 3 BLUE -> 4 WHITE -> back to 0 OFF
@@ -90,7 +102,7 @@ import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
  *   BLM (back left motor),  BRM (back right motor),
  *   SLM (shooter left motor), SRM (shooter right motor),
  *   ILM (intake left motor),  IRM (intake right motor)
- *   servo1, servo2, servo3, servo4 (servo ports, configured as "Servo")
+ *   servo_NT (servo1 in the code), servo_PT (servo2 in the code), servo_NC (servo3 in the code), servo_FJ (servo4 in the code) (servo ports, configured as "Servo")
  *   imu (the Control Hub's built-in IMU, I2C bus 0; usually already in the config)
  *   prism (goBILDA Prism RGB LED Driver, Control Hub I2C bus 1)
  *   color1 (REV Color Sensor V3, CONTROL HUB I2C bus 2)
@@ -124,23 +136,61 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private static final double SHOOTER_TICKS_PER_REV = 28;
     private static final double SHOOTER_MAX_RPM       = 6000;  // free speed of the motor
 
-    // ---- Shooter PIDF (from the Shooter PIDF Tuner OpMode) ----
-    // false = use the SDK's built-in defaults. Set true after tuning.
-    private static final boolean USE_CUSTOM_PIDF = false;
-    private static final double SHOOTER_P = 1.8408;
-    private static final double SHOOTER_I = 0.1841;
-    private static final double SHOOTER_D = 0.0;
-    private static final double SHOOTER_F_LEFT  = 14.0030;   // each shooter has its own F
-    private static final double SHOOTER_F_RIGHT = 18.4084;
+    // ---- Shooter PIDF ----
+    // Tune with the "Shooter PIDF Tuner V2" OpMode, then paste its "PASTE INTO TELEOP" lines here.
+    // false = use the hub's built-in values (shown as "AS FOUND" on telemetry during INIT).
+    // Set true after tuning. The hub forgets PIDF at power-off, so this code sets it every start.
+    private static final boolean USE_CUSTOM_PIDF = true;   // tuned 2026-10-21 at 2400 RPM, 12.8-12.9 V
+    // LEFT shooter motor (SLM) — NECTAR while NECTAR_IS_LEFT_SHOOTER = true
+    private static final double SHOOTER_P_LEFT  = 120.0;
+    private static final double SHOOTER_I_LEFT  = 0.0;
+    private static final double SHOOTER_D_LEFT  = 0.0;
+    private static final double SHOOTER_F_LEFT  = 13.0;
+    // RIGHT shooter motor (SRM) — POLLEN while NECTAR_IS_LEFT_SHOOTER = true
+    private static final double SHOOTER_P_RIGHT = 180.0;
+    private static final double SHOOTER_I_RIGHT = 0.0;
+    private static final double SHOOTER_D_RIGHT = 0.0;
+    private static final double SHOOTER_F_RIGHT = 14.8;
+
+    // ---- Voltage-scaled F (optional, advanced; leave false until the basic tune works) ----
+    // Turn on only if recovery gets much worse late in a match. F is scaled by
+    // PIDF_TUNED_VOLTS / battery volts, so a sagging battery still gets the right base power.
+    // Only active when USE_CUSTOM_PIDF = true.
+    private static final boolean VOLTAGE_COMP_F   = false;
+    private static final double  PIDF_TUNED_VOLTS = 12.9;   // battery voltage during tuning (the tuner prints it)
+    private static final double  VCOMP_UPDATE_SEC = 0.5;    // how often to check the battery
+    private static final double  VCOMP_MIN_CHANGE = 0.02;   // only resend F if the scale moved 2% or more
+    private static final double  VCOMP_MIN_SCALE  = 0.85;   // safety limits on the scale
+    private static final double  VCOMP_MAX_SCALE  = 1.25;
 
     // Shooter speed. Each shooter has its own target.
-    //   LEFT  shooter: gamepad2 D-pad up = +RPM_STEP, D-pad down = -RPM_STEP
-    //   RIGHT shooter: gamepad2 B        = +RPM_STEP, X          = -RPM_STEP
+    //   POLLEN shooter: gamepad1 D-pad up = +RPM_STEP, D-pad down = -RPM_STEP
+    //   NECTAR shooter: gamepad1 B        = +RPM_STEP, A          = -RPM_STEP
     private static final double START_RPM_LEFT  = 2400;  // left shooter speed at the start of the match
     private static final double START_RPM_RIGHT = 2400;  // right shooter speed at the start of the match
-    private static final double RPM_STEP        = 100;   // change per D-pad tap
+    private static final double RPM_STEP        = 10;    // change per tap (was 100)
     private static final double MIN_RPM         = 1000;  // D-pad down stops here
-    private static final double READY_TOLERANCE = 50;    // "ready to fire" if within this many RPM
+
+    // ---- Fire gate (servo1 = nectar, servo2 = pollen; servo3 is NOT gated) ----
+    // A fire servo will only move if its shooter is ON and the ACTUAL RPM has stayed within
+    // FIRE_TOLERANCE_RPM of target for at least FIRE_SETTLE_SEC (so a flywheel just passing
+    // through the target while overshooting doesn't count). Set FIRE_SETTLE_SEC = 0 for "in band right now".
+    // Only the START of a fire is gated: once the servo opens it finishes its timed cycle even though
+    // the RPM dips as the ball goes through.
+    private static final boolean FIRE_GATE_ON       = true;
+    // 50, not 40: the hub reports speed in steps of about 43 RPM (20 ticks/s), so a 40 RPM
+    // band only accepts the one exact reading and every flicker blocks the shot.
+    private static final double  FIRE_TOLERANCE_RPM = 50;
+    private static final double  FIRE_SETTLE_SEC    = 0.10;
+    // ---- Shot log (telemetry) ----
+    // Each servo1 (nectar) / servo2 (pollen) fire starts a record. For SHOT_LOG_SEC after the fire it
+    // tracks that shooter's lowest RPM, highest RPM, and the time until it's back within FIRE_TOLERANCE_RPM.
+    // Firing the same shooter again before SHOT_LOG_SEC is up ends the previous record early.
+    private static final int    SHOT_LOG_SIZE = 3;     // how many shots to show
+    private static final double SHOT_LOG_SEC  = 2.0;   // how long each shot is watched; raise if it shows NOT BACK
+
+    // Rumble/LED "ready" feedback uses the same tolerance, so the buzz means "you can fire now".
+    private static final double READY_TOLERANCE = FIRE_TOLERANCE_RPM;
 
     // ---- Other tunables ----
     private static final double INTAKE_POWER = 1.0;
@@ -162,8 +212,8 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     // ---- Servo2 (gamepad2 Left bumper) ----
     // Same idea as servo1, with its own settings. Uses the same SERVO_RANGE_DEG,
     // so if servo2 is a different model, give it its own range.
-    private static final double  SERVO2_HOME_DEG   = 20;   // kept off 0 so the servo isn't jammed at its end stop
-    private static final double  SERVO2_TARGET_DEG = 110;  // still a 90-degree swing
+    private static final double  SERVO2_HOME_DEG   = 30;   // kept off 0 so the servo isn't jammed at its end stop
+    private static final double  SERVO2_TARGET_DEG = 110;  // 80-degree swing from home (set 120 for a 90-degree swing)
     private static final boolean SERVO2_REVERSED   = false; // set true if it moves the wrong way
     private static final double  SERVO2_HOLD_SEC   = 0.3;   // how long it stays out before returning
 
@@ -186,6 +236,9 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private static final double  SERVO4_SWING_DEG  = 88;   // how far DOWN it goes when toggled (0 + 88 = 88), fixed
     private static final double  SERVO4_OPEN_DEG   = SERVO4_HOME_DEG + SERVO4_SWING_DEG;  // 88 deg = down
     private static final boolean SERVO4_REVERSED   = true;   // reversed: down swing now goes the other way
+    // Fine-tune during the match: gamepad1 D-pad up/down moves servo4 by this many degrees per tap.
+    // It adjusts whichever position servo4 is in right now (UP or DOWN), and remembers it.
+    private static final double  SERVO4_STEP_DEG   = 1;
 
     // ---- Shake (gamepad2 Y) ----
     // One press = robot strafes left, right, left, right... to knock stuck balls loose.
@@ -201,7 +254,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     // ---- Drive mode ----
     // false = ROBOT-CENTRIC (stick forward = robot's front). Use this while testing.
     // true  = FIELD-CENTRIC (stick forward = away from driver). Needs HUB_LOGO/HUB_USB set correctly.
-    private static final boolean FIELD_CENTRIC = true;
+    private static final boolean FIELD_CENTRIC = false;
 
     // ---- Heading hold (fixes curving) ----
     // When you drive without touching the turn stick, the IMU keeps the robot
@@ -281,7 +334,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     // Third strip = NECTAR shooter's target RPM. Fourth strip = POLLEN shooter's target RPM.
     // true  = nectar is the LEFT shooter motor (SLM), pollen is the RIGHT shooter motor (SRM).
     // false = swapped. The gamepad layout follows nectar/pollen, not left/right motor:
-    // pollen controls are always on the LEFT of gamepad 2, nectar on the RIGHT.
+    // RPM +/- is on gamepad 1 (pollen = D-pad up/down, nectar = B/A); ON/OFF stays on gamepad 2.
     private static final boolean NECTAR_IS_LEFT_SHOOTER = true;
     //   below 2200 = SIREN, 2200 = RED, 2300 = ORANGE, 2400 = GREEN, 2500 = BLUE, 2600 = WHITE,
     //   above 2600 = SPECIAL: fast full rainbow
@@ -325,7 +378,8 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private boolean lightsOn = false;
     private boolean lastRB1;
     private int limitCount = LIMIT_START_COUNT;   // 0 = no balls (strip 1 dark), 1-4 = RED/GREEN/BLUE/WHITE
-    private boolean lastRT2, lastLT2, lastRSB2, lastStart2, lastLSB2;
+    private boolean lastRT1, lastLT1;               // gamepad1 triggers (intake)
+    private boolean lastRSB2, lastStart2, lastLSB2;
     private boolean strip2Blue = false;     // false = RED, true = BLUE  (also = our ball color)
     private boolean alertActive = false;    // siren + reverse intake running
     private final ElapsedTime alertTimer = new ElapsedTime();
@@ -344,6 +398,12 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private boolean[]     limitWasPressed;
     private ElapsedTime[] limitDebounce;
 
+    // ---- Shooter PIDF state ----
+    private String pidfAsFoundLeft = "", pidfAsFoundRight = "";   // what the hub had before this OpMode touched it
+    private String pidfActiveLeft  = "", pidfActiveRight  = "";   // what is running now
+    private double appliedFScale = 1.0;                            // voltage-comp F multiplier currently on the hub
+    private final ElapsedTime vcompTimer = new ElapsedTime();
+
     // ---- State ----
     private double targetRpmLeft  = START_RPM_LEFT;   // current left shooter target
     private double targetRpmRight = START_RPM_RIGHT;  // current right shooter target
@@ -358,10 +418,23 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private boolean servo2Out = false;
     private final ElapsedTime servo2Timer = new ElapsedTime();
     private boolean servo4Open = false; // false = up (home), true = down
+    private double  servo4HomeDeg = SERVO4_HOME_DEG;  // current UP angle (D-pad adjusts it)
+    private double  servo4OpenDeg = SERVO4_OPEN_DEG;  // current DOWN angle (D-pad adjusts it)
+    private boolean lastDpadUp1, lastDpadDown1;
     private boolean shaking = false;    // shake in progress
     private final ElapsedTime shakeTimer = new ElapsedTime();
     private boolean lastY2;
     private boolean wasReady = false;   // used to rumble once when flywheels reach speed
+
+    // ---- Fire gate state ----
+    // Measured RPM this loop, and how long each shooter has been inside the fire band.
+    private double leftRpmNow, rightRpmNow;
+    private boolean leftInBand, rightInBand;
+    private final ElapsedTime leftSettleTimer  = new ElapsedTime();
+    private final ElapsedTime rightSettleTimer = new ElapsedTime();
+    private String lastFireBlock = "none yet";
+    private final ArrayList<ShotRecord> shotLog = new ArrayList<>();   // newest first
+    private int shotCount = 0;
 
     // Previous button states (for detecting a single press)
     private boolean lastUp, lastDown, lastX, lastRB, lastLB, lastA2, lastB2, lastX2, lastY1, lastLeft2, lastRight2;
@@ -383,10 +456,10 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         intakeRight  = hardwareMap.get(DcMotor.class, "IRM");
         shooterLeft  = hardwareMap.get(DcMotorEx.class, "SLM");
         shooterRight = hardwareMap.get(DcMotorEx.class, "SRM");
-        servo1       = hardwareMap.get(Servo.class, "servo1");
-        servo2       = hardwareMap.get(Servo.class, "servo2");
-        servo3       = hardwareMap.get(Servo.class, "servo3");
-        servo4       = hardwareMap.get(Servo.class, "servo4");
+        servo1       = hardwareMap.get(Servo.class, "servo_NT");
+        servo2       = hardwareMap.get(Servo.class, "servo_PT");
+        servo3       = hardwareMap.get(Servo.class, "servo_NC");
+        servo4       = hardwareMap.get(Servo.class, "servo_FJ");
         rgbLight     = hardwareMap.get(ServoImplEx.class, "rgblight");
         rgbLight.setPwmEnable();
         rgbLight.setPosition(RGB_RED);   // solid red, always
@@ -471,10 +544,14 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
             s.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
             s.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT); // coast down, easier on motors
         }
+        // Read what the hub has BEFORE changing it (shown on INIT telemetry), then apply ours.
+        pidfAsFoundLeft  = pidfText(shooterLeft.getPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER));
+        pidfAsFoundRight = pidfText(shooterRight.getPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER));
         if (USE_CUSTOM_PIDF) {
-            shooterLeft.setVelocityPIDFCoefficients(SHOOTER_P, SHOOTER_I, SHOOTER_D, SHOOTER_F_LEFT);
-            shooterRight.setVelocityPIDFCoefficients(SHOOTER_P, SHOOTER_I, SHOOTER_D, SHOOTER_F_RIGHT);
+            applyShooterPidf(1.0);
         }
+        pidfActiveLeft  = pidfText(shooterLeft.getPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER));
+        pidfActiveRight = pidfText(shooterRight.getPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER));
 
         // During INIT: keep reading the sensors so you can tune colors before the match starts.
         while (!isStarted() && !isStopRequested()) {
@@ -490,6 +567,9 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
                 hub.clearBulkCache();
             }
 
+            updateShooterSettle();   // must run BEFORE handleToggles so the fire gate uses this loop's RPM
+            updateShotLog();
+            updateVoltageComp();
             drive();
             handleToggles();
             colorSort();
@@ -502,6 +582,38 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
 
         stopAll();
+    }
+
+    // ---------------- Shooter PIDF ----------------
+    // Sends each shooter its own P, I, D and F. fScale multiplies F (1.0 = as tuned).
+    private void applyShooterPidf(double fScale) {
+        shooterLeft.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER,
+                new PIDFCoefficients(SHOOTER_P_LEFT, SHOOTER_I_LEFT, SHOOTER_D_LEFT, SHOOTER_F_LEFT * fScale));
+        shooterRight.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER,
+                new PIDFCoefficients(SHOOTER_P_RIGHT, SHOOTER_I_RIGHT, SHOOTER_D_RIGHT, SHOOTER_F_RIGHT * fScale));
+        appliedFScale = fScale;
+    }
+
+    // Voltage-scaled F: every VCOMP_UPDATE_SEC, rescale F to the battery. Does nothing unless
+    // USE_CUSTOM_PIDF and VOLTAGE_COMP_F are both true. Only talks to the hub when the scale
+    // moved by VCOMP_MIN_CHANGE or more, so it doesn't slow the loop.
+    private void updateVoltageComp() {
+        if (!USE_CUSTOM_PIDF || !VOLTAGE_COMP_F) return;
+        if (vcompTimer.seconds() < VCOMP_UPDATE_SEC) return;
+        vcompTimer.reset();
+        double v = batteryVoltage();
+        if (v < 7) return;   // bad reading, keep what we have
+        double scale = Math.max(VCOMP_MIN_SCALE, Math.min(VCOMP_MAX_SCALE, PIDF_TUNED_VOLTS / v));
+        if (Math.abs(scale - appliedFScale) / appliedFScale < VCOMP_MIN_CHANGE) return;
+        applyShooterPidf(scale);
+        pidfActiveLeft  = String.format("P %.4f  I %.4f  D %.4f  F %.4f",
+                SHOOTER_P_LEFT, SHOOTER_I_LEFT, SHOOTER_D_LEFT, SHOOTER_F_LEFT * scale);
+        pidfActiveRight = String.format("P %.4f  I %.4f  D %.4f  F %.4f",
+                SHOOTER_P_RIGHT, SHOOTER_I_RIGHT, SHOOTER_D_RIGHT, SHOOTER_F_RIGHT * scale);
+    }
+
+    private String pidfText(PIDFCoefficients c) {
+        return String.format("P %.4f  I %.4f  D %.4f  F %.4f", c.p, c.i, c.d, c.f);
     }
 
     // ---------------- Field-centric mecanum drive ----------------
@@ -624,12 +736,13 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
 
     // ---------------- Toggles (flip only on the press, not while held) ----------------
     private void handleToggles() {
-        // Gamepad 2 (operator): intake on the triggers (past halfway counts as a press)
-        boolean rt2 = gamepad2.right_trigger > TRIGGER_PRESSED;
-        boolean lt2 = gamepad2.left_trigger  > TRIGGER_PRESSED;
-        // Gamepad 2 LEFT side = POLLEN, RIGHT side = NECTAR
-        boolean pollenUp   = gamepad2.dpad_up,  pollenDown = gamepad2.dpad_down, pollenOnOff = gamepad2.dpad_left;
-        boolean nectarUp   = gamepad2.y,        nectarDown = gamepad2.a,         nectarOnOff = gamepad2.b;
+        // Gamepad 1 (driver): intake on the triggers (past halfway counts as a press)
+        boolean rt1 = gamepad1.right_trigger > TRIGGER_PRESSED;
+        boolean lt1 = gamepad1.left_trigger  > TRIGGER_PRESSED;
+        // RPM +/- is on GAMEPAD 1: POLLEN = D-pad up/down, NECTAR = B (up) / A (down).
+        // Shooter ON/OFF stays on GAMEPAD 2: POLLEN = D-pad left, NECTAR = B.
+        boolean pollenUp   = gamepad1.dpad_up,  pollenDown = gamepad1.dpad_down, pollenOnOff = gamepad2.dpad_left;
+        boolean nectarUp   = gamepad1.b,        nectarDown = gamepad1.a,         nectarOnOff = gamepad2.b;
         // Map nectar/pollen onto the actual left/right shooter motors.
         boolean up     = NECTAR_IS_LEFT_SHOOTER ? nectarUp    : pollenUp;      // left motor  RPM +
         boolean down   = NECTAR_IS_LEFT_SHOOTER ? nectarDown  : pollenDown;    // left motor  RPM -
@@ -643,12 +756,12 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         boolean a2 = gamepad2.x;              // servo3 (nectar)
         boolean y1 = gamepad1.y;   // servo4 toggle (driver)
 
-        // Intake: RT toggles forward, LT toggles reverse. Pressing one cancels the other.
-        if (rt2 && !lastRT2) {
+        // Intake (gamepad1): RT toggles forward, LT toggles reverse. Pressing one cancels the other.
+        if (rt1 && !lastRT1) {
             intakeOn = !intakeOn;
             if (intakeOn) intakeReverse = false;
         }
-        if (lt2 && !lastLT2) {
+        if (lt1 && !lastLT1) {
             intakeReverse = !intakeReverse;
             if (intakeReverse) intakeOn = false;
         }
@@ -659,23 +772,47 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         if (right2 && !lastRight2) {
             shooterRightOn = !shooterRightOn;
         }
-        // Each servo: one press starts its cycle. Presses during the cycle are ignored.
+        // Each fire servo: one press starts its cycle, but ONLY if its shooter is settled (fire gate).
+        // Presses during the cycle are ignored.
         if (rb && !lastRB && !servo1Out) {
-            servo1Out = true;
-            servo1Timer.reset();
+            if (nectarReadyToFire()) {
+                servo1Out = true;
+                servo1Timer.reset();
+                startShot(true);
+            } else {
+                fireBlocked("servo1 (NECTAR)", true);
+            }
         }
+        // Servo3 is NOT RPM-gated: a press always starts its cycle.
         if (a2 && !lastA2 && !servo3Up) {
             servo3Up = true;
             servo3Timer.reset();
         }
         if (lb && !lastLB && !servo2Out) {
-            servo2Out = true;
-            servo2Timer.reset();
+            if (pollenReadyToFire()) {
+                servo2Out = true;
+                servo2Timer.reset();
+                startShot(false);
+            } else {
+                fireBlocked("servo2 (POLLEN)", false);
+            }
         }
         // Servo4: gamepad1 Y flips between open and closed.
         if (y1 && !lastY1) {
             servo4Open = !servo4Open;
         }
+        // Servo4 fine-tune: gamepad1 D-pad right = +1 degree, D-pad left = -1 degree.
+        // Changes the position servo4 is sitting at right now (UP or DOWN).
+        boolean dUp1 = gamepad1.dpad_right, dDown1 = gamepad1.dpad_left;
+        double nudge = 0;
+        if (dUp1 && !lastDpadUp1)     nudge += SERVO4_STEP_DEG;
+        if (dDown1 && !lastDpadDown1) nudge -= SERVO4_STEP_DEG;
+        if (nudge != 0) {
+            if (servo4Open) servo4OpenDeg = clampDeg(servo4OpenDeg + nudge);
+            else            servo4HomeDeg = clampDeg(servo4HomeDeg + nudge);
+        }
+        lastDpadUp1 = dUp1;
+        lastDpadDown1 = dDown1;
         // LEFT shooter motor speed (+/- RPM_STEP). Stops at MIN_RPM / SHOOTER_MAX_RPM.
         if (up && !lastUp) {
             targetRpmLeft = Math.min(targetRpmLeft + RPM_STEP, SHOOTER_MAX_RPM);
@@ -727,8 +864,115 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
         lastLSB2 = lsb2;
 
-        lastRT2 = rt2; lastLT2 = lt2; lastUp = up; lastDown = down; lastRB = rb; lastLB = lb; lastA2 = a2;
+        lastRT1 = rt1; lastLT1 = lt1; lastUp = up; lastDown = down; lastRB = rb; lastLB = lb; lastA2 = a2;
         lastB2 = b2; lastX2 = x2; lastY1 = y1; lastLeft2 = left2; lastRight2 = right2;
+    }
+
+    // ---------------- Fire gate ----------------
+    // Reads both shooter speeds once per loop and tracks how long each has been inside
+    // +/- FIRE_TOLERANCE_RPM of its target. Leaving the band (or turning the shooter off,
+    // or changing the target) restarts that shooter's settle timer.
+    private void updateShooterSettle() {
+        leftRpmNow  = Math.abs(ticksPerSecToRpm(shooterLeft.getVelocity()));
+        rightRpmNow = Math.abs(ticksPerSecToRpm(shooterRight.getVelocity()));
+
+        leftInBand = shooterLeftOn && Math.abs(leftRpmNow - targetRpmLeft) <= FIRE_TOLERANCE_RPM;
+        if (!leftInBand) leftSettleTimer.reset();
+
+        rightInBand = shooterRightOn && Math.abs(rightRpmNow - targetRpmRight) <= FIRE_TOLERANCE_RPM;
+        if (!rightInBand) rightSettleTimer.reset();
+    }
+
+    private boolean leftReadyToFire() {
+        return !FIRE_GATE_ON || (leftInBand && leftSettleTimer.seconds() >= FIRE_SETTLE_SEC);
+    }
+
+    private boolean rightReadyToFire() {
+        return !FIRE_GATE_ON || (rightInBand && rightSettleTimer.seconds() >= FIRE_SETTLE_SEC);
+    }
+
+    private boolean nectarReadyToFire() {
+        return NECTAR_IS_LEFT_SHOOTER ? leftReadyToFire() : rightReadyToFire();
+    }
+
+    private boolean pollenReadyToFire() {
+        return NECTAR_IS_LEFT_SHOOTER ? rightReadyToFire() : leftReadyToFire();
+    }
+
+    // ---------------- Shot log ----------------
+    private class ShotRecord {
+        final int number;
+        final String name;
+        final boolean usesLeft;
+        final double target, fireRpm;
+        double low, high;
+        double backSec = -1;          // seconds from fire until back in band (-1 = not yet)
+        boolean droppedOut = false;   // RPM left the +/- band after the shot
+        boolean active = true;        // still being watched
+        final ElapsedTime timer = new ElapsedTime();
+
+        ShotRecord(int number, String name, boolean usesLeft, double target, double fireRpm) {
+            this.number = number;
+            this.name = name;
+            this.usesLeft = usesLeft;
+            this.target = target;
+            this.fireRpm = fireRpm;
+            low = fireRpm;
+            high = fireRpm;
+        }
+
+        void update(double rpm) {
+            if (!active) return;
+            double t = timer.seconds();
+            low  = Math.min(low, rpm);
+            high = Math.max(high, rpm);
+            boolean inBand = Math.abs(rpm - target) <= FIRE_TOLERANCE_RPM;
+            if (!inBand) {
+                droppedOut = true;
+                backSec = -1;         // left the band (again): recovery not finished
+            } else if (droppedOut && backSec < 0) {
+                backSec = t;          // back in band; the LAST return is the one that counts
+            }
+            if (t >= SHOT_LOG_SEC) active = false;
+        }
+
+        String recovery() {
+            if (!droppedOut)  return active ? "watching..." : "never left band";
+            if (backSec >= 0) return String.format("back in %.2fs", backSec);
+            return active ? "recovering..." : String.format("NOT BACK in %.1fs", SHOT_LOG_SEC);
+        }
+    }
+
+    // Called when servo1 (nectar) or servo2 (pollen) actually fires.
+    private void startShot(boolean nectar) {
+        boolean useLeft = (nectar == NECTAR_IS_LEFT_SHOOTER);
+        for (ShotRecord r : shotLog) {
+            if (r.usesLeft == useLeft) r.active = false;   // a new shot on this shooter ends the old record
+        }
+        shotCount++;
+        shotLog.add(0, new ShotRecord(shotCount, nectar ? "NECTAR" : "POLLEN", useLeft,
+                useLeft ? targetRpmLeft : targetRpmRight,
+                useLeft ? leftRpmNow : rightRpmNow));
+        while (shotLog.size() > SHOT_LOG_SIZE) shotLog.remove(shotLog.size() - 1);
+    }
+
+    // Feeds this loop's RPM into every shot still being watched.
+    private void updateShotLog() {
+        for (ShotRecord r : shotLog) {
+            r.update(r.usesLeft ? leftRpmNow : rightRpmNow);
+        }
+    }
+
+    // A fire press was refused: short rumble on the operator's gamepad + telemetry reason.
+    private void fireBlocked(String which, boolean nectar) {
+        boolean useLeft = (nectar == NECTAR_IS_LEFT_SHOOTER);
+        boolean on      = useLeft ? shooterLeftOn : shooterRightOn;
+        double  rpm     = useLeft ? leftRpmNow    : rightRpmNow;
+        double  target  = useLeft ? targetRpmLeft : targetRpmRight;
+        lastFireBlock = on
+                ? String.format("%s blocked: %.0f / %.0f RPM (need +/-%.0f)", which, rpm, target, FIRE_TOLERANCE_RPM)
+                : which + " blocked: shooter is OFF";
+        gamepad2.rumble(150);
     }
 
     // Starts the siren on strip 2 + reverse intake for ALERT_SEC. Ignored if already running.
@@ -879,7 +1123,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
         servo2.setPosition(degToServoPos(servo2Out ? SERVO2_TARGET_DEG : SERVO2_HOME_DEG));
 
-        servo4.setPosition(degToServoPos(servo4Open ? SERVO4_OPEN_DEG : SERVO4_HOME_DEG));
+        servo4.setPosition(degToServoPos(servo4Open ? servo4OpenDeg : servo4HomeDeg));
 
         // Each shooter runs on its own. setPower(0) lets a flywheel coast
         // instead of PID-braking to zero.
@@ -1034,6 +1278,11 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         return Math.max(0.0, Math.min(1.0, deg / SERVO_RANGE_DEG));
     }
 
+    // Keeps an angle inside the servo's travel (0 to SERVO_RANGE_DEG).
+    private double clampDeg(double deg) {
+        return Math.max(0.0, Math.min(SERVO_RANGE_DEG, deg));
+    }
+
     // Deadzone + curve: small stick movements = fine control, full stick = full speed.
     // Rescales after the deadzone so there's no "jump" when you leave it.
     private double shapeStick(double v) {
@@ -1055,8 +1304,8 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         double l = Math.abs(ticksPerSecToRpm(shooterLeft.getVelocity()));
         double r = Math.abs(ticksPerSecToRpm(shooterRight.getVelocity()));
         // Ready when every shooter that is ON is at its target. Shooters that are OFF are ignored.
-        boolean leftOk  = !shooterLeftOn  || Math.abs(l - targetRpmLeft)  < READY_TOLERANCE;
-        boolean rightOk = !shooterRightOn || Math.abs(r - targetRpmRight) < READY_TOLERANCE;
+        boolean leftOk  = !shooterLeftOn  || Math.abs(l - targetRpmLeft)  <= READY_TOLERANCE;
+        boolean rightOk = !shooterRightOn || Math.abs(r - targetRpmRight) <= READY_TOLERANCE;
         return leftOk && rightOk;
     }
 
@@ -1099,14 +1348,41 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         if (volts > 0) minVolts = Math.min(minVolts, volts);
         telemetry.addData("Battery", "%.2f V   (lowest this run: %.2f V)", volts, minVolts);
 
+        // Shooter PIDF: which values are running. AS FOUND only shows during INIT.
+        String pidfMode = !USE_CUSTOM_PIDF ? "HUB DEFAULTS (USE_CUSTOM_PIDF = false)"
+                : VOLTAGE_COMP_F ? String.format("CUSTOM, F x%.3f (voltage comp)", appliedFScale)
+                : "CUSTOM";
+        telemetry.addData("Shooter PIDF", pidfMode);
+        telemetry.addData("   SLM (left) ", pidfActiveLeft);
+        telemetry.addData("   SRM (right)", pidfActiveRight);
+        if (!isStarted()) {
+            telemetry.addData("   AS FOUND SLM", pidfAsFoundLeft);
+            telemetry.addData("   AS FOUND SRM", pidfAsFoundRight);
+        }
+
         double leftRpm  = Math.abs(ticksPerSecToRpm(shooterLeft.getVelocity()));
         double rightRpm = Math.abs(ticksPerSecToRpm(shooterRight.getVelocity()));
         double nectarRpm    = NECTAR_IS_LEFT_SHOOTER ? leftRpm  : rightRpm;
         double pollenRpm    = NECTAR_IS_LEFT_SHOOTER ? rightRpm : leftRpm;
         double nectarTarget = NECTAR_IS_LEFT_SHOOTER ? targetRpmLeft  : targetRpmRight;
         double pollenTarget = NECTAR_IS_LEFT_SHOOTER ? targetRpmRight : targetRpmLeft;
-        telemetry.addData("POLLEN RPM", "%.0f / target %.0f", pollenRpm, pollenTarget);
-        telemetry.addData("NECTAR RPM", "%.0f / target %.0f", nectarRpm, nectarTarget);
+        telemetry.addData("POLLEN RPM", "%.0f / target %.0f   %s", pollenRpm, pollenTarget,
+                pollenReadyToFire() ? "CAN FIRE" : "WAIT");
+        telemetry.addData("NECTAR RPM", "%.0f / target %.0f   %s", nectarRpm, nectarTarget,
+                nectarReadyToFire() ? "CAN FIRE" : "WAIT");
+        telemetry.addData("Last fire block", lastFireBlock);
+        if (shotLog.isEmpty()) {
+            telemetry.addData("Shot log", "no shots yet");
+        }
+        for (ShotRecord r : shotLog) {
+            telemetry.addData("Shot #" + r.number + " " + r.name, "fired %.0f / target %.0f   %s",
+                    r.fireRpm, r.target, r.recovery());
+            telemetry.addData("   low / high", "%.0f (%+.0f)  /  %.0f (%+.0f)",
+                    r.low, r.low - r.target, r.high, r.high - r.target);
+        }
+
+        telemetry.addData("Servo4", "%s   UP %.0f deg   DOWN %.0f deg",
+                servo4Open ? "DOWN" : "UP", servo4HomeDeg, servo4OpenDeg);
 
         telemetry.addData("Ball count", "%d (%s)", limitCount, limitCountName());
         for (int i = 0; i < limitSwitches.length; i++) {
