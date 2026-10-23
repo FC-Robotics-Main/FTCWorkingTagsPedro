@@ -43,6 +43,11 @@ import java.util.List;
  *
  * Fire is NOT gated here, so you can see what happens if you fire early.
  * For fair spin-up timing, let the wheel stop completely before each test.
+ *
+ * 2026-10-23: starting values synced to DuckTapeRobotics_1_0 (POLLEN F 13.7, targets 2410 / 2250)
+ *             for the pollen retune after the mechanical changes. Added a RAW velocity line:
+ *             while a shooter is running, its raw ticks/s must be POSITIVE. Negative = motor and
+ *             encoder disagree (the RPM lines hide this because they use Math.abs).
  */
 @TeleOp(name = "Shooter PIDF Tuner V2", group = "Tuning")
 public class ShooterPidfTunerV2 extends LinearOpMode {
@@ -70,12 +75,12 @@ public class ShooterPidfTunerV2 extends LinearOpMode {
     private static final double  SERVO3_HOLD_SEC   = 0.55;
 
     // Starting values for editing = the TeleOp's current saved values {P, I, D, F}.
-    private static final double[] START_LEFT  = {120.0, 0.0, 0.0, 13.0};   // NECTAR tuned 2026-10-21
-    private static final double[] START_RIGHT = {180.0, 0.0, 0.0, 14.8};   // POLLEN tuned 2026-10-21
+    private static final double[] START_LEFT  = {180.0, 0.0, 0.0, 13.0};   // NECTAR (P raised 120 -> 180 on 2026-10-22)
+    private static final double[] START_RIGHT = {180.0, 0.0, 0.0, 13.7};   // POLLEN (F re-fit 2026-10-22 for 2200; was 14.8)
 
     // Each shooter keeps its own target, set to its match starting speed in DuckTapeRobotics_1_0.
     // B switches shooters and brings that shooter's target with it.
-    private static final double[] START_TARGET_RPM = {2350, 2200};   // {LEFT/NECTAR, RIGHT/POLLEN}
+    private static final double[] START_TARGET_RPM = {2410, 2250};   // {LEFT/NECTAR, RIGHT/POLLEN}
     private static final double RPM_STEP = 10;   // LT / RT change per pull (same as the TeleOp)
     private static final double MIN_RPM  = 1000;
     private static final double MAX_RPM  = 6000;
@@ -119,6 +124,7 @@ public class ShooterPidfTunerV2 extends LinearOpMode {
 
     // ---- Live readings ----
     private final double[] rpm = new double[2];
+    private final double[] rawTps = new double[2];   // signed, straight from the hub
     private double volts = 0;
     private double startVolts = 0, startRpm = 0;
 
@@ -241,7 +247,10 @@ public class ShooterPidfTunerV2 extends LinearOpMode {
         while (opModeIsActive()) {
             for (LynxModule hub : hubs) hub.clearBulkCache();
             volts = readBattery();
-            for (int i = 0; i < 2; i++) rpm[i] = Math.abs(tpsToRpm(shooter[i].getVelocity()));
+            for (int i = 0; i < 2; i++) {
+                rawTps[i] = shooter[i].getVelocity();
+                rpm[i] = Math.abs(tpsToRpm(rawTps[i]));
+            }
 
             handleButtons();
             runTest();
@@ -418,7 +427,7 @@ public class ShooterPidfTunerV2 extends LinearOpMode {
         } else if (mode == Mode.FULL_POWER) {
             if (fullCross < 0 && r >= targetRpm) fullCross = t;
             if (t >= FULL_TOP_FROM_SEC) {
-                fullSum += Math.abs(shooter[sel].getVelocity());
+                fullSum += Math.abs(rawTps[sel]);
                 fullN++;
             }
             if (t >= FULL_TOP_TO_SEC) {
@@ -518,6 +527,10 @@ public class ShooterPidfTunerV2 extends LinearOpMode {
         telemetry.addData("Battery", "%.2f V", volts);
         telemetry.addData("Target", "%.0f RPM (%.0f ticks/s)", targetRpm, rpmToTps(targetRpm));
         telemetry.addData("RPM now", "LEFT %.0f   RIGHT %.0f   (err %+.0f)", rpm[0], rpm[1], rpm[sel] - targetRpm);
+        telemetry.addData("RAW ticks/s", "LEFT %+.0f   RIGHT %+.0f   (running shooter must be +)", rawTps[0], rawTps[1]);
+        if (mode != Mode.IDLE && rawTps[sel] < -20) {
+            telemetry.addLine("!! RAW VELOCITY IS NEGATIVE: motor and encoder disagree. Stop and check wiring/direction.");
+        }
         if (mode != Mode.IDLE) telemetry.addData("Test time", "%.2f s", runTimer.seconds());
 
         telemetry.addData("Active on hub", (custom[sel] ? "CUSTOM  " : "AS FOUND  ") + hubReports[sel]);

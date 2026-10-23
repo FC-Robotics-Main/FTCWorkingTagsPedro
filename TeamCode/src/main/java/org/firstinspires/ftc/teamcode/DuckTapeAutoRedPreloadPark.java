@@ -60,8 +60,13 @@ public class DuckTapeAutoRedPreloadPark extends LinearOpMode {
 
     // ---- Fire gate (same as TeleOp) ----
     private static final boolean FIRE_GATE_ON       = true;
-    private static final double  FIRE_TOLERANCE_RPM = 60;
-    private static final double  FIRE_SETTLE_SEC    = 0.05;   // RPM must stay in the band this long before a shot
+    // The gate now uses the AVERAGE of the last RPM_AVG_SAMPLES readings, not one raw reading.
+    // The hub reports speed in ~43 RPM steps and single readings jump around, so a raw gate
+    // either lets shots out at random speeds (wide band) or never passes (tight band).
+    // Averaging removes that jitter so a tight band can actually hold.
+    private static final double  FIRE_TOLERANCE_RPM = 45;     // averaged RPM must be within this of target
+    private static final double  FIRE_SETTLE_SEC    = 0.15;   // ...continuously for this long before a shot
+    private static final int     RPM_AVG_SAMPLES    = 6;      // readings averaged (~1 per loop, about 0.06-0.1 s)
 
     // ---- Servo2 = POLLEN trigger (same as TeleOp) ----
     private static final double  SERVO_RANGE_DEG   = 180;
@@ -73,7 +78,7 @@ public class DuckTapeAutoRedPreloadPark extends LinearOpMode {
     // ---- Autonomous-only settings ----
     private static final int     SHOT_COUNT         = 4;     // pollen shots at the cell
     private static final double  SERVO2_RETURN_SEC  = 0.3;   // time for servo2 to get back home before the next shot
-    private static final double  SPINUP_TIMEOUT_SEC = 3.0;   // longest wait for the RPM to settle before each shot
+    private static final double  SPINUP_TIMEOUT_SEC = 4.0;   // longest wait for the RPM to settle before each shot
     private static final boolean FIRE_ON_TIMEOUT    = true;  // true = fire anyway after the timeout, false = skip that shot
     private static final double  PATH_TIMEOUT_SEC   = 6.0;   // give up on any one path after this long
 
@@ -110,11 +115,22 @@ public class DuckTapeAutoRedPreloadPark extends LinearOpMode {
 
     // ---- State (same names as TeleOp) ----
     private double targetRpmRight = START_RPM_RIGHT;
-    private double rightRpmNow;
+    private double rightRpmNow;          // raw reading this loop
+    private double rightRpmAvg;          // average of the last RPM_AVG_SAMPLES readings (used by the gate)
+    private double rightRpmSpread;       // max - min of those readings: how much the speed is wobbling
+    private final double[] rpmSamples = new double[RPM_AVG_SAMPLES];
+    private int rpmSampleCount = 0, rpmSampleIndex = 0;
     private boolean rightInBand;
     private final ElapsedTime rightSettleTimer = new ElapsedTime();
 
     private int shotsFired = 0;
+    private int shotsForced = 0;         // fired after SPINUP_TIMEOUT_SEC without passing the gate
+    // Shot log for telemetry
+    private final double[] shotAvgRpm    = new double[SHOT_COUNT];
+    private final double[] shotSpread    = new double[SHOT_COUNT];
+    private final double[] shotWaitSec   = new double[SHOT_COUNT];
+    private final boolean[] shotForced   = new boolean[SHOT_COUNT];
+    private double gateWaitSec = 0;
     private String status = "INIT";
 
     @Override
@@ -231,6 +247,13 @@ public class DuckTapeAutoRedPreloadPark extends LinearOpMode {
             }
 
             status = "Shot " + shot + "/" + SHOT_COUNT + ": FIRING" + (ready ? "" : " (timeout, RPM not settled)");
+            if (shotsFired < SHOT_COUNT) {
+                shotAvgRpm[shotsFired]  = rightRpmAvg;
+                shotSpread[shotsFired]  = rightRpmSpread;
+                shotWaitSec[shotsFired] = gateWaitSec;
+                shotForced[shotsFired]  = !ready;
+            }
+            if (!ready) shotsForced++;
             servo2.setPosition(degToServoPos(SERVO2_TARGET_DEG));
             waitSeconds(SERVO2_HOLD_SEC);
 
@@ -249,6 +272,7 @@ public class DuckTapeAutoRedPreloadPark extends LinearOpMode {
         rightSettleTimer.reset();
         while (opModeIsActive()) {
             readShooter();
+            gateWaitSec = timeout.seconds();
             if (!FIRE_GATE_ON || (rightInBand && rightSettleTimer.seconds() >= FIRE_SETTLE_SEC)) {
                 return true;
             }
@@ -268,7 +292,23 @@ public class DuckTapeAutoRedPreloadPark extends LinearOpMode {
         }
         follower.update();
         rightRpmNow = Math.abs(ticksPerSecToRpm(shooterRight.getVelocity()));
-        rightInBand = Math.abs(rightRpmNow - targetRpmRight) <= FIRE_TOLERANCE_RPM;
+
+        // Rolling average + spread of the last RPM_AVG_SAMPLES readings.
+        rpmSamples[rpmSampleIndex] = rightRpmNow;
+        rpmSampleIndex = (rpmSampleIndex + 1) % RPM_AVG_SAMPLES;
+        if (rpmSampleCount < RPM_AVG_SAMPLES) rpmSampleCount++;
+        double sum = 0, lo = Double.MAX_VALUE, hi = -Double.MAX_VALUE;
+        for (int i = 0; i < rpmSampleCount; i++) {
+            sum += rpmSamples[i];
+            lo = Math.min(lo, rpmSamples[i]);
+            hi = Math.max(hi, rpmSamples[i]);
+        }
+        rightRpmAvg = sum / rpmSampleCount;
+        rightRpmSpread = hi - lo;
+
+        // Gate needs a full window of readings so one lucky sample can't pass it.
+        rightInBand = rpmSampleCount == RPM_AVG_SAMPLES
+                && Math.abs(rightRpmAvg - targetRpmRight) <= FIRE_TOLERANCE_RPM;
         if (!rightInBand) rightSettleTimer.reset();
     }
 
@@ -296,10 +336,23 @@ public class DuckTapeAutoRedPreloadPark extends LinearOpMode {
 
     private void updateTelemetry() {
         Pose p = follower.getPose();
+        double inBandSec = rightInBand ? rightSettleTimer.seconds() : 0;
         telemetry.addData("Status", status);
-        telemetry.addData("POLLEN RPM", "%.0f / target %.0f   %s", rightRpmNow, targetRpmRight,
-                rightInBand ? "IN BAND" : "WAIT");
-        telemetry.addData("Shots fired", "%d / %d", shotsFired, SHOT_COUNT);
+        telemetry.addLine("---- POLLEN SHOOTER ----");
+        telemetry.addData("Target", "%.0f RPM", targetRpmRight);
+        telemetry.addData("RPM avg (gate)", "%.0f  (%+.0f, need +/-%.0f)",
+                rightRpmAvg, rightRpmAvg - targetRpmRight, FIRE_TOLERANCE_RPM);
+        telemetry.addData("RPM raw", "%.0f", rightRpmNow);
+        telemetry.addData("Wobble (max-min)", "%.0f RPM", rightRpmSpread);
+        telemetry.addData("In band for", "%.2f / %.2f s   %s", inBandSec, FIRE_SETTLE_SEC,
+                (rightInBand && inBandSec >= FIRE_SETTLE_SEC) ? "CAN FIRE" : "WAIT");
+        telemetry.addData("Shots", "%d / %d  (%d forced by timeout)", shotsFired, SHOT_COUNT, shotsForced);
+        for (int i = 0; i < shotsFired && i < SHOT_COUNT; i++) {
+            telemetry.addData("  Shot " + (i + 1), "avg %.0f (%+.0f)  wobble %.0f  waited %.2fs%s",
+                    shotAvgRpm[i], shotAvgRpm[i] - targetRpmRight, shotSpread[i], shotWaitSec[i],
+                    shotForced[i] ? "  FORCED" : "");
+        }
+        telemetry.addLine("---- DRIVE ----");
         telemetry.addData("Pose", "x %.1f  y %.1f  heading %.1f deg",
                 p.getX(), p.getY(), Math.toDegrees(p.getHeading()));
         telemetry.update();

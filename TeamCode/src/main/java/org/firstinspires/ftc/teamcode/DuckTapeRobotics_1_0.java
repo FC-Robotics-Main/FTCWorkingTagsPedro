@@ -57,16 +57,22 @@ import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
  *   RIGHT SIDE = NECTAR shooter
  *     B            : NECTAR shooter ON (to turn OFF, gamepad1 holds Back while you press)  (speed is on gamepad 1)
  *     Right bumper : SERVO1 (nectar) opens, waits SERVO1_HOLD_SEC (0.45s), then returns home
- *     X            : SERVO3 (nectar) goes up 45 degrees, waits SERVO3_HOLD_SEC (0.55s), then returns home
+ *     Back         : NECTAR OVERRIDE (toggle): press once = SERVO1 opens and STAYS open, skipping the
+ *                  fire gate (any RPM, even with the shooter off). Press Back again = SERVO1 closes.
+ *                  Right bumper does nothing while it's held open. Shot log marks it "NECTAR OVR".
+ *     X            : SERVO3 (nectar chamber) goes up 45 degrees, waits SERVO3_HOLD_SEC (0.45s), then returns home
  *   FIRE GATE: pressing the button for SERVO1/2 only starts its open-wait-return cycle if THEIR
- *     shooter is ON and its actual RPM has been within the fire tolerance (starts at 45) of target for
- *     FIRE_SETTLE_SEC. If the RPM isn't right, the press is ignored (short rumble on gamepad 2,
- *     reason on telemetry "Last fire block"). Press again once it's settled.
+ *     shooter is ON and its actual RPM has been within FIRE_TOLERANCE_RPM (45) of target for
+ *     the fire settle time (starts at 0.30s). If the RPM isn't right, the press is ignored (short rumble on gamepad 2,
+ *     no telemetry message). Press again once it's settled.
  *     SERVO3 is NOT gated; it always runs when pressed.
- *     Right stick button (press the stick down): fire tolerance +10 RPM per tap
- *     Left stick button  (press the stick down): fire tolerance -10 RPM per tap
- *                  (limits 10-200; current value is on telemetry "Fire tolerance")
- *   SHOT LOG (telemetry): the last 3 shots (servo1 = NECTAR, servo2 = POLLEN), newest first.
+ *     Y            : FIRE WINDOW step: each press +10 RPM. Anything past 80 wraps back to 10.
+ *                  Starts at +/-45 every match: 45 -> 55 -> 65 -> 75 -> 10 -> 20 -> ... -> 80 -> 10 ...
+ *                  Shown on telemetry "Fire window".
+ *     Right stick button (press the stick down): fire settle time +0.1s per tap
+ *     Left stick button  (press the stick down): fire settle time -0.1s per tap
+ *                  (limits 0-2.0s; 0 = fire the moment it's in band; current value is on telemetry "Fire settle")
+ *   SHOT LOG (still recorded, NOT on telemetry right now): the last 3 shots (servo1 = NECTAR, servo2 = POLLEN), newest first.
  *     For each: RPM when fired / target, how long until it was back within the fire tolerance,
  *     the lowest RPM after the shot and the highest RPM (overshoot) during the recovery.
  *   Everything else
@@ -143,7 +149,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
 
     // ---- Shooter PIDF ----
     // Tune with the "Shooter PIDF Tuner V2" OpMode, then paste its "PASTE INTO TELEOP" lines here.
-    // false = use the hub's built-in values (shown as "AS FOUND" on telemetry during INIT).
+    // false = use the hub's built-in values (no longer shown on telemetry).
     // Set true after tuning. The hub forgets PIDF at power-off, so this code sets it every start.
     private static final boolean USE_CUSTOM_PIDF = true;   // tuned 2026-10-21 at 2400 RPM, 12.8-12.9 V
     // LEFT shooter motor (SLM) — NECTAR while NECTAR_IS_LEFT_SHOOTER = true
@@ -152,7 +158,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private static final double SHOOTER_D_LEFT  = 0.0;
     private static final double SHOOTER_F_LEFT  = 13.0;
     // RIGHT shooter motor (SRM) — POLLEN while NECTAR_IS_LEFT_SHOOTER = true
-    private static final double SHOOTER_P_RIGHT = 180.0;
+    private static final double SHOOTER_P_RIGHT = 160.0;
     private static final double SHOOTER_I_RIGHT = 0.0;
     private static final double SHOOTER_D_RIGHT = 0.0;
     private static final double SHOOTER_F_RIGHT = 13.7;   // re-fit 2026-10-22 for the 2200 RPM match speed (14.8 was for 2400)
@@ -172,7 +178,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     //   POLLEN shooter: gamepad1 D-pad up = +RPM_STEP, D-pad down = -RPM_STEP
     //   NECTAR shooter: gamepad1 B        = +RPM_STEP, A          = -RPM_STEP
     private static final double START_RPM_LEFT  = 2410;  // NECTAR (left shooter) speed at the start of the match
-    private static final double START_RPM_RIGHT = 2250;  // POLLEN (right shooter) speed at the start of the match
+    private static final double START_RPM_RIGHT = 2400;  // POLLEN (right shooter) speed at the start of the match
     private static final double RPM_STEP        = 10;    // change per tap (was 100)
     private static final double MIN_RPM         = 1000;  // D-pad down stops here
 
@@ -186,11 +192,14 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     // The hub reports speed in steps of about 43 RPM (20 ticks/s). A +/-45 band is 90 RPM wide,
     // so it always holds at least one reading (two at 2410 and 2250). If you change a target and
     // shots start getting blocked on every flicker, raise this back toward 60.
-    private static final double  FIRE_TOLERANCE_RPM = 45;   // STARTING value; gamepad2 stick clicks change it during the match
-    private static final double  FIRE_TOL_STEP      = 10;   // change per stick click
-    private static final double  FIRE_TOL_MIN       = 10;   // below ~22 the band can miss every hub reading and block all shots
-    private static final double  FIRE_TOL_MAX       = 200;
-    private static final double  FIRE_SETTLE_SEC    = 0.10;
+    private static final double  FIRE_TOLERANCE_RPM = 45;   // STARTING window; gamepad2 Y steps it. Below ~22 it can block every shot
+    private static final double  FIRE_TOL_STEP      = 10;   // +RPM per Y press
+    private static final double  FIRE_TOL_MIN       = 10;   // where it wraps back to
+    private static final double  FIRE_TOL_MAX       = 80;   // highest it goes
+    private static final double  FIRE_SETTLE_SEC    = 0.30; // STARTING settle time; gamepad2 stick clicks change it during the match
+    private static final double  FIRE_SETTLE_STEP   = 0.1;  // change per stick click
+    private static final double  FIRE_SETTLE_MIN    = 0.0;
+    private static final double  FIRE_SETTLE_MAX    = 2.0;
     // ---- Shot log (telemetry) ----
     // Each servo1 (nectar) / servo2 (pollen) fire starts a record. For SHOT_LOG_SEC after the fire it
     // tracks that shooter's lowest RPM, highest RPM, and the time until it's back within FIRE_TOLERANCE_RPM.
@@ -234,7 +243,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private static final double  SERVO3_SWING_DEG  = 45;   // how far UP goes from home
     private static final double  SERVO3_UP_DEG     = SERVO3_HOME_DEG + SERVO3_SWING_DEG;
     private static final boolean SERVO3_REVERSED   = false;
-    private static final double  SERVO3_HOLD_SEC   = 0.55;  // how long it stays up before returning
+    private static final double  SERVO3_HOLD_SEC   = 0.45;  // how long it stays up before returning
 
     // ---- Servo4 (gamepad1 Y) ----
     // TOGGLE: starts UP at SERVO4_HOME_DEG. Press Y to swing DOWN 87 degrees, press Y again to go back up.
@@ -394,7 +403,8 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     private int limitCount = LIMIT_START_COUNT;   // 0 = no balls (strip 1 dark), 1-4 = RED/GREEN/BLUE/WHITE
     private boolean lastRT1, lastLT1;               // gamepad1 triggers (intake)
     private boolean lastRSB2, lastStart2, lastLSB2, lastDpadUp2, lastDpadDown2;
-    private double  fireToleranceRpm = FIRE_TOLERANCE_RPM;   // live fire-gate band (gamepad2 stick clicks +/- FIRE_TOL_STEP)
+    private double  fireToleranceRpm = FIRE_TOLERANCE_RPM;   // live fire window (gamepad2 Y steps it)
+    private double  fireSettleSec    = FIRE_SETTLE_SEC;      // live settle time (gamepad2 stick clicks +/- FIRE_SETTLE_STEP)
     private boolean strip2Blue = false;     // false = RED, true = BLUE  (also = our ball color)
     private boolean alertActive = false;    // siren + reverse intake running
     private final ElapsedTime alertTimer = new ElapsedTime();
@@ -444,7 +454,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
 
     // ---- Fire gate state ----
     // Measured RPM this loop, and how long each shooter has been inside the fire band.
-    private double leftRpmNow, rightRpmNow;
+    private double leftRpmNow, rightRpmNow;        // this loop's actual RPM reading (what everything uses)
     private boolean leftInBand, rightInBand;
     private final ElapsedTime leftSettleTimer  = new ElapsedTime();
     private final ElapsedTime rightSettleTimer = new ElapsedTime();
@@ -454,6 +464,9 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
 
     // Previous button states (for detecting a single press)
     private boolean lastUp, lastDown, lastX, lastRB, lastLB, lastA2, lastB2, lastX2, lastY1, lastLeft2, lastRight2;
+    private boolean lastNectarOvr2;   // gamepad2 Back (nectar fire override)
+    private boolean lastWindowY2;   // gamepad2 Y (fire window step)
+    private boolean servo1Held = false;   // true = override is holding servo1 open (no auto-return)
 
     private boolean snapping = false;      // heading lock active
     private boolean snapOnTarget = false;  // within tolerance of snap heading
@@ -796,11 +809,33 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
             if (nectarReadyToFire()) {
                 servo1Out = true;
                 servo1Timer.reset();
-                startShot(true);
+                startShot(true, false);
             } else {
                 fireBlocked("servo1 (NECTAR)", true);
             }
         }
+        // NECTAR OVERRIDE (gamepad2 Back): TOGGLE. First press opens servo1 with NO RPM check and
+        // holds it open; next press closes it. Also takes over a normal timed open already in progress.
+        boolean nectarOvr = gamepad2.back;
+        if (nectarOvr && !lastNectarOvr2) {
+            if (servo1Held) {
+                servo1Held = false;
+                servo1Out = false;          // close now
+            } else {
+                if (!servo1Out) startShot(true, true);   // only log a new shot if it wasn't already open
+                servo1Held = true;
+                servo1Out = true;
+            }
+        }
+        lastNectarOvr2 = nectarOvr;
+        // FIRE WINDOW step (gamepad2 Y): +10 per press; anything past 80 wraps to 10.
+        // Also used by the ready rumble and shot log.
+        boolean windowY2 = gamepad2.y;
+        if (windowY2 && !lastWindowY2) {
+            double next = fireToleranceRpm + FIRE_TOL_STEP;
+            fireToleranceRpm = next > FIRE_TOL_MAX ? FIRE_TOL_MIN : next;
+        }
+        lastWindowY2 = windowY2;
         // Servo3 is NOT RPM-gated: a press always starts its cycle.
         if (a2 && !lastA2 && !servo3Up) {
             servo3Up = true;
@@ -810,7 +845,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
             if (pollenReadyToFire()) {
                 servo2Out = true;
                 servo2Timer.reset();
-                startShot(false);
+                startShot(false, false);
             } else {
                 fireBlocked("servo2 (POLLEN)", false);
             }
@@ -854,12 +889,13 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
         lastRB1 = rb1;
 
-        // Fire tolerance: gamepad2 right stick click = +10 RPM, left stick click = -10 RPM.
-        // Also used by the ready rumble/LED and the shot log.
+        // Fire settle time: gamepad2 right stick click = +0.1s, left stick click = -0.1s.
+        // Rounded to 0.01s so repeated taps don't drift.
         boolean rsb2 = gamepad2.right_stick_button;
         boolean lsb2 = gamepad2.left_stick_button;
-        if (rsb2 && !lastRSB2) fireToleranceRpm = Math.min(fireToleranceRpm + FIRE_TOL_STEP, FIRE_TOL_MAX);
-        if (lsb2 && !lastLSB2) fireToleranceRpm = Math.max(fireToleranceRpm - FIRE_TOL_STEP, FIRE_TOL_MIN);
+        if (rsb2 && !lastRSB2) fireSettleSec = Math.min(fireSettleSec + FIRE_SETTLE_STEP, FIRE_SETTLE_MAX);
+        if (lsb2 && !lastLSB2) fireSettleSec = Math.max(fireSettleSec - FIRE_SETTLE_STEP, FIRE_SETTLE_MIN);
+        fireSettleSec = Math.round(fireSettleSec * 100) / 100.0;
         lastRSB2 = rsb2;
         lastLSB2 = lsb2;
 
@@ -903,6 +939,8 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         leftRpmNow  = Math.abs(ticksPerSecToRpm(shooterLeft.getVelocity()));
         rightRpmNow = Math.abs(ticksPerSecToRpm(shooterRight.getVelocity()));
 
+        // Every single reading has to be in band. One reading outside restarts the timer,
+        // so passing the gate means the RPM sat in band the WHOLE settle time.
         leftInBand = shooterLeftOn && Math.abs(leftRpmNow - targetRpmLeft) <= fireToleranceRpm;
         if (!leftInBand) leftSettleTimer.reset();
 
@@ -911,11 +949,11 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     }
 
     private boolean leftReadyToFire() {
-        return !FIRE_GATE_ON || (leftInBand && leftSettleTimer.seconds() >= FIRE_SETTLE_SEC);
+        return !FIRE_GATE_ON || (leftInBand && leftSettleTimer.seconds() >= fireSettleSec);
     }
 
     private boolean rightReadyToFire() {
-        return !FIRE_GATE_ON || (rightInBand && rightSettleTimer.seconds() >= FIRE_SETTLE_SEC);
+        return !FIRE_GATE_ON || (rightInBand && rightSettleTimer.seconds() >= fireSettleSec);
     }
 
     private boolean nectarReadyToFire() {
@@ -971,13 +1009,13 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     }
 
     // Called when servo1 (nectar) or servo2 (pollen) actually fires.
-    private void startShot(boolean nectar) {
+    private void startShot(boolean nectar, boolean override) {
         boolean useLeft = (nectar == NECTAR_IS_LEFT_SHOOTER);
         for (ShotRecord r : shotLog) {
             if (r.usesLeft == useLeft) r.active = false;   // a new shot on this shooter ends the old record
         }
         shotCount++;
-        shotLog.add(0, new ShotRecord(shotCount, nectar ? "NECTAR" : "POLLEN", useLeft,
+        shotLog.add(0, new ShotRecord(shotCount, (nectar ? "NECTAR" : "POLLEN") + (override ? " OVR" : ""), useLeft,
                 useLeft ? targetRpmLeft : targetRpmRight,
                 useLeft ? leftRpmNow : rightRpmNow));
         while (shotLog.size() > SHOT_LOG_SIZE) shotLog.remove(shotLog.size() - 1);
@@ -1143,7 +1181,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
 
         // Auto-return: timer-based, so driving and shooters keep working during the wait.
-        if (servo1Out && servo1Timer.seconds() >= SERVO1_HOLD_SEC) {
+        if (servo1Out && !servo1Held && servo1Timer.seconds() >= SERVO1_HOLD_SEC) {   // held = no auto-return
             servo1Out = false;
         }
         servo1.setPosition(degToServoPos(servo1Out ? SERVO1_TARGET_DEG : SERVO1_HOME_DEG));
@@ -1336,8 +1374,8 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
 
     private boolean shootersReady() {
         if (!shooterLeftOn && !shooterRightOn) return false;
-        double l = Math.abs(ticksPerSecToRpm(shooterLeft.getVelocity()));
-        double r = Math.abs(ticksPerSecToRpm(shooterRight.getVelocity()));
+        double l = leftRpmNow;    // same reading as the fire gate
+        double r = rightRpmNow;
         // Ready when every shooter that is ON is at its target. Shooters that are OFF are ignored.
         boolean leftOk  = !shooterLeftOn  || Math.abs(l - targetRpmLeft)  <= fireToleranceRpm;
         boolean rightOk = !shooterRightOn || Math.abs(r - targetRpmRight) <= fireToleranceRpm;
@@ -1377,60 +1415,20 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         return v == Double.POSITIVE_INFINITY ? 0 : v;
     }
 
-    // Telemetry: battery, shooter RPMs, color sorting, and limit switch count.
+    // Telemetry: battery voltage, both shooters' RPM, and the live fire settle time.
     private void updateTelemetry() {
         double volts = batteryVoltage();
         if (volts > 0) minVolts = Math.min(minVolts, volts);
         telemetry.addData("Battery", "%.2f V   (lowest this run: %.2f V)", volts, minVolts);
 
-        // Shooter PIDF: which values are running. AS FOUND only shows during INIT.
-        String pidfMode = !USE_CUSTOM_PIDF ? "HUB DEFAULTS (USE_CUSTOM_PIDF = false)"
-                : VOLTAGE_COMP_F ? String.format("CUSTOM, F x%.3f (voltage comp)", appliedFScale)
-                : "CUSTOM";
-        telemetry.addData("Shooter PIDF", pidfMode);
-        telemetry.addData("   SLM (left) ", pidfActiveLeft);
-        telemetry.addData("   SRM (right)", pidfActiveRight);
-        if (!isStarted()) {
-            telemetry.addData("   AS FOUND SLM", pidfAsFoundLeft);
-            telemetry.addData("   AS FOUND SRM", pidfAsFoundRight);
-        }
-
-        double leftRpm  = Math.abs(ticksPerSecToRpm(shooterLeft.getVelocity()));
-        double rightRpm = Math.abs(ticksPerSecToRpm(shooterRight.getVelocity()));
-        double nectarRpm    = NECTAR_IS_LEFT_SHOOTER ? leftRpm  : rightRpm;
-        double pollenRpm    = NECTAR_IS_LEFT_SHOOTER ? rightRpm : leftRpm;
+        double nectarRpm    = NECTAR_IS_LEFT_SHOOTER ? leftRpmNow  : rightRpmNow;
+        double pollenRpm    = NECTAR_IS_LEFT_SHOOTER ? rightRpmNow : leftRpmNow;
         double nectarTarget = NECTAR_IS_LEFT_SHOOTER ? targetRpmLeft  : targetRpmRight;
         double pollenTarget = NECTAR_IS_LEFT_SHOOTER ? targetRpmRight : targetRpmLeft;
-        telemetry.addData("POLLEN RPM", "%.0f / target %.0f   %s", pollenRpm, pollenTarget,
-                pollenReadyToFire() ? "CAN FIRE" : "WAIT");
-        telemetry.addData("NECTAR RPM", "%.0f / target %.0f   %s", nectarRpm, nectarTarget,
-                nectarReadyToFire() ? "CAN FIRE" : "WAIT");
-        telemetry.addData("Fire tolerance", "+/-%.0f RPM   (gamepad2 R stick +10 / L stick -10)", fireToleranceRpm);
-        telemetry.addData("Last fire block", lastFireBlock);
-        if (shotLog.isEmpty()) {
-            telemetry.addData("Shot log", "no shots yet");
-        }
-        for (ShotRecord r : shotLog) {
-            telemetry.addData("Shot #" + r.number + " " + r.name, "fired %.0f / target %.0f   %s",
-                    r.fireRpm, r.target, r.recovery());
-            telemetry.addData("   low / high", "%.0f (%+.0f)  /  %.0f (%+.0f)",
-                    r.low, r.low - r.target, r.high, r.high - r.target);
-        }
-
-        telemetry.addData("Servo4", "%s   UP %.0f deg   DOWN %.0f deg",
-                servo4Open ? "DOWN" : "UP", servo4HomeDeg, servo4OpenDeg);
-
-        telemetry.addData("Ball count", "%d (%s)", limitCount, limitCountName());
-        for (int i = 0; i < limitSwitches.length; i++) {
-            telemetry.addData("Switch " + LIMIT_SWITCH_NAMES[i], limitWasPressed[i] ? "PRESSED" : "released");
-        }
-
-        telemetry.addData("Our color (light 2)", strip2Blue ? "BLUE" : "RED");
-        for (int i = 0; i < colorSensors.length; i++) {
-            telemetry.addData("Sensor " + COLOR_SENSOR_NAMES[i], "%s  hue %.0f  sat %.2f  dist %.1f cm",
-                    sensorColor[i], sensorHue[i], sensorSat[i], sensorDist[i]);
-        }
-        telemetry.addData("Last sort", lastSortEvent);
+        telemetry.addData("POLLEN RPM", "%.0f / target %.0f", pollenRpm, pollenTarget);
+        telemetry.addData("NECTAR RPM", "%.0f / target %.0f", nectarRpm, nectarTarget);
+        telemetry.addData("Fire window", "+/-%.0f RPM", fireToleranceRpm);
+        telemetry.addData("Fire settle", "%.2f s", fireSettleSec);
         telemetry.update();
     }
 
