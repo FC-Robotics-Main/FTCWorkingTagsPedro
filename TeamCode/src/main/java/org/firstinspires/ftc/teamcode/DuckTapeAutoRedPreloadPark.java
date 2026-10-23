@@ -32,7 +32,8 @@ import java.util.List;
  *          shooting spot is against the wall). No drive before shooting.
  *   Step 2 Back straight off the wall BACK_OFF_WALL_IN (3 in.), strafe STRAIGHT LEFT along the
  *          wall to DODGE_X, then drive BACKWARD straight up column B, well clear of the frame.
- *   Step 3 Park in front of the red loading zone (A5) and hold there.
+ *   Step 3 Go COLUMN_EXTRA_IN (8 in.) farther up column B, park in front of the red loading zone (A5),
+ *          stop, then drive PARK_EXTRA_IN (7 in.) more into the parking space and hold there.
  *
  * TUNING THE ROUTE
  *   The poses below were measured off the drawing, so they may be an inch or two off.
@@ -90,8 +91,14 @@ public class DuckTapeAutoRedPreloadPark extends LinearOpMode {
     // then goes straight up, so it can't cut the corner into the frame.
     private static final double DODGE_X = 25;
     private final Pose aroundLow   = new Pose(DODGE_X, 9 + BACK_OFF_WALL_IN, BACK_TO_REAR);   // strafed left, still near the wall
-    private final Pose aroundHigh  = new Pose(DODGE_X, 91, BACK_TO_REAR);   // straight up column B, past the frame
+    // COLUMN_EXTRA_IN = how much farther up column B (toward the rear wall) it goes before
+    // turning toward the parking spot. Was 0 (stopped at y = 91).
+    private static final double COLUMN_EXTRA_IN = 8;
+    private final Pose aroundHigh  = new Pose(DODGE_X, 91 + COLUMN_EXTRA_IN, BACK_TO_REAR);   // straight up column B, past the frame
     private final Pose parkPose    = new Pose(15, 98, BACK_TO_REAR);   // front of the red loading zone (A5)
+    // PARK_EXTRA_IN = after it stops at parkPose, it drives this much farther in the same direction
+    // it was heading (toward the parking space), stops again, and holds there.
+    private static final double PARK_EXTRA_IN = 7;
 
     // ---- Hardware (same names as TeleOp) ----
     private DcMotorEx shooterRight;
@@ -99,7 +106,7 @@ public class DuckTapeAutoRedPreloadPark extends LinearOpMode {
     private List<LynxModule> hubs;
     private Follower follower;
 
-    private PathChain toPark;
+    private PathChain toPark, parkNudge;
 
     // ---- State (same names as TeleOp) ----
     private double targetRpmRight = START_RPM_RIGHT;
@@ -160,6 +167,10 @@ public class DuckTapeAutoRedPreloadPark extends LinearOpMode {
         status = "Steps 2-3: off the wall, around the frame, to park";
         runPath(toPark);
 
+        // Stop at the park spot, then push PARK_EXTRA_IN more inches into the parking space.
+        status = "Final nudge: " + PARK_EXTRA_IN + " in farther into the parking space";
+        runPath(parkNudge);
+
         status = "DONE: fired " + shotsFired + " of " + SHOT_COUNT + ", parked";
         while (opModeIsActive()) {
             readShooter();   // keeps follower.update() running so it holds the park spot
@@ -177,6 +188,17 @@ public class DuckTapeAutoRedPreloadPark extends LinearOpMode {
                 .addPath(new BezierLine(aroundLow, aroundHigh))
                 .setConstantHeadingInterpolation(BACK_TO_REAR)
                 .addPath(new BezierLine(aroundHigh, parkPose))
+                .setConstantHeadingInterpolation(BACK_TO_REAR)
+                .build();
+
+        // Final nudge: PARK_EXTRA_IN farther along the direction of the last leg (aroundHigh -> parkPose).
+        double dx = parkPose.getX() - aroundHigh.getX();
+        double dy = parkPose.getY() - aroundHigh.getY();
+        double len = Math.hypot(dx, dy);
+        Pose finalPark = new Pose(parkPose.getX() + dx / len * PARK_EXTRA_IN,
+                parkPose.getY() + dy / len * PARK_EXTRA_IN, BACK_TO_REAR);
+        parkNudge = follower.pathBuilder()
+                .addPath(new BezierLine(parkPose, finalPark))
                 .setConstantHeadingInterpolation(BACK_TO_REAR)
                 .build();
     }
