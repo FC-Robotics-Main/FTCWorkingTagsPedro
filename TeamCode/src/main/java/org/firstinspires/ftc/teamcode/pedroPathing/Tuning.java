@@ -19,6 +19,9 @@ package org.firstinspires.ftc.teamcode.pedroPathing;
  *   7. Heading PIDF           — tune the rotation controller
  *   8. Drive PIDF             — tune the path-following velocity controller
  *   9. Centripetal Correction — tune curve overshoot correction
+ *
+ * LOCAL CHANGE: onSelect() now calls Drawing.init() so the Panels Field tab uses
+ * Pedro coordinates and the robot is drawn on the field.
  * =====================================================================================
  */
 
@@ -113,6 +116,8 @@ public class Tuning extends SelectableOpMode {
 
     @Override
     public void onSelect() {
+        Drawing.init();  // set Panels Field to Pedro coordinates so the robot is drawn on the field
+
         if (follower == null) {
             follower = Constants.createFollower(hardwareMap);
             PanelsConfigurables.INSTANCE.refreshClass(this);

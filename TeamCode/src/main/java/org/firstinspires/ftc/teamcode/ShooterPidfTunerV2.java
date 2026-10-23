@@ -31,7 +31,7 @@ import java.util.List;
  *   D-pad L / R  : choose which value to edit: P, I, D, F
  *   D-pad U / D  : raise / lower that value by one step (applies to the hub immediately)
  *   LB / RB      : step size /10 / x10
- *   LT / RT      : target RPM -100 / +100
+ *   LT / RT      : target RPM -10 / +10 (each shooter keeps its own target)
  *   Left stick button  : starting rule: P = 0.1 x F, I = 0.1 x P, D = 0
  *   Right stick button : P = I = D = 0 (for the F-only step)
  *
@@ -50,7 +50,9 @@ public class ShooterPidfTunerV2 extends LinearOpMode {
     // ---- Must match DuckTapeRobotics_1_0 ----
     private static final double  TICKS_PER_REV          = 28;
     private static final boolean NECTAR_IS_LEFT_SHOOTER = true;
-    private static final double  FIRE_TOLERANCE_RPM     = 40;
+    // 50, not 40: the hub reports speed in steps of about 43 RPM (20 ticks/s), so a 40 RPM
+    // band only accepts the one exact reading and every flicker counts as "out of band".
+    private static final double  FIRE_TOLERANCE_RPM     = 50;
     private static final double  FIRE_SETTLE_SEC        = 0.10;
 
     private static final double  SERVO_RANGE_DEG   = 180;
@@ -68,11 +70,13 @@ public class ShooterPidfTunerV2 extends LinearOpMode {
     private static final double  SERVO3_HOLD_SEC   = 0.55;
 
     // Starting values for editing = the TeleOp's current saved values {P, I, D, F}.
-    private static final double[] START_LEFT  = {2.5, 0.0, 0.0, 13.0};   // NECTAR mid-tune: Step 3 (P doubling)
-    private static final double[] START_RIGHT = {1.8408, 0.1841, 0.0, 18.4084};
+    private static final double[] START_LEFT  = {120.0, 0.0, 0.0, 13.0};   // NECTAR tuned 2026-10-21
+    private static final double[] START_RIGHT = {180.0, 0.0, 0.0, 14.8};   // POLLEN tuned 2026-10-21
 
-    private static final double START_TARGET_RPM = 2400;
-    private static final double RPM_STEP = 100;
+    // Each shooter keeps its own target, set to its match starting speed in DuckTapeRobotics_1_0.
+    // B switches shooters and brings that shooter's target with it.
+    private static final double[] START_TARGET_RPM = {2350, 2200};   // {LEFT/NECTAR, RIGHT/POLLEN}
+    private static final double RPM_STEP = 10;   // LT / RT change per pull (same as the TeleOp)
     private static final double MIN_RPM  = 1000;
     private static final double MAX_RPM  = 6000;
 
@@ -84,7 +88,7 @@ public class ShooterPidfTunerV2 extends LinearOpMode {
     private static final double STEADY_TO_SEC     = 12.0;
     private static final double FULL_TOP_FROM_SEC = 10.0;
     private static final double FULL_TOP_TO_SEC   = 12.0;
-    private static final double SHOT_WATCH_SEC    = 2.0;
+    private static final double SHOT_WATCH_SEC    = 4.0;   // POLLEN recovers in ~2 s; watch long enough to time it
     private static final double REST_RPM          = 50;    // "wheel stopped" for fair timing
     private static final double F_FORMULA_TOP     = 32767;
 
@@ -105,7 +109,8 @@ public class ShooterPidfTunerV2 extends LinearOpMode {
     private int sel = 0;
     private int coefIdx = 3;           // start on F, the first thing to tune
     private double step = 0.1;
-    private double targetRpm = START_TARGET_RPM;
+    private final double[] savedTarget = START_TARGET_RPM.clone();
+    private double targetRpm = START_TARGET_RPM[0];
     private String note = "";
 
     private enum Mode { IDLE, VELOCITY, FULL_POWER }
@@ -282,7 +287,7 @@ public class ShooterPidfTunerV2 extends LinearOpMode {
             else { stopTest(); startFullPower(); }
         }
         if (b) {
-            if (mode == Mode.IDLE) { sel = 1 - sel; note = ""; }
+            if (mode == Mode.IDLE) { savedTarget[sel] = targetRpm; sel = 1 - sel; targetRpm = savedTarget[sel]; note = ""; }
             else note = "Stop the test (A or X) before switching shooters.";
         }
 
@@ -564,7 +569,7 @@ public class ShooterPidfTunerV2 extends LinearOpMode {
         if (tunedV > 0) telemetry.addLine(String.format("PIDF_TUNED_VOLTS = %.1f;  USE_CUSTOM_PIDF = true;", tunedV));
 
         telemetry.addLine("--- GP1: B shooter | A vel | X full | Y F-from-full | Back asfound/custom");
-        telemetry.addLine("    Dpad L/R pick, U/D change | LB/RB step | LT/RT RPM | LSB rule | RSB zero PID");
+        telemetry.addLine("    Dpad L/R pick, U/D change | LB/RB step | LT/RT RPM +/-10 | LSB rule | RSB zero PID");
         telemetry.addLine("    GP2: RB nectar fire | LB pollen fire | X servo3 | Y hit | A miss | Back reset");
         telemetry.update();
     }
