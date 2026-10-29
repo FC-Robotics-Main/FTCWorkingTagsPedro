@@ -50,13 +50,13 @@ public class DuckTapeAutoRedPreloadPark extends LinearOpMode {
 
     // ---- Shooter PIDF (same as TeleOp; RIGHT motor SRM = POLLEN) ----
     private static final boolean USE_CUSTOM_PIDF = true;
-    private static final double SHOOTER_P_RIGHT = 180.0;
+    private static final double SHOOTER_P_RIGHT = 160.0;
     private static final double SHOOTER_I_RIGHT = 0.0;
     private static final double SHOOTER_D_RIGHT = 0.0;
     private static final double SHOOTER_F_RIGHT = 13.7;
 
     // ---- Shooter speed (same as TeleOp) ----
-    private static final double START_RPM_RIGHT = 2250;   // POLLEN (right shooter) speed
+    private static final double START_RPM_RIGHT = 2400;   // POLLEN (right shooter) speed
 
     // ---- Fire gate (same as TeleOp) ----
     private static final boolean FIRE_GATE_ON       = true;
@@ -103,7 +103,7 @@ public class DuckTapeAutoRedPreloadPark extends LinearOpMode {
     private final Pose parkPose    = new Pose(15, 98, BACK_TO_REAR);   // front of the red loading zone (A5)
     // PARK_EXTRA_IN = after it stops at parkPose, it drives this much farther in the same direction
     // it was heading (toward the parking space), stops again, and holds there.
-    private static final double PARK_EXTRA_IN = 7;
+    private static final double PARK_EXTRA_IN = 0;
 
     // ---- Hardware (same names as TeleOp) ----
     private DcMotorEx shooterRight;
