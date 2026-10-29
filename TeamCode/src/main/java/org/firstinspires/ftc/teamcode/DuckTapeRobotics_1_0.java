@@ -1530,7 +1530,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         return v == Double.POSITIVE_INFINITY ? 0 : v;
     }
 
-    // Telemetry: battery voltage, both shooters' RPM, and the live fire settle time.
+    // Telemetry:  battery voltage, both shooters' RPM, and the live fire settle time.
     private void updateTelemetry() {
         // Confirm box at the top of the Driver Station screen.
         if (REQUIRE_CONFIRM && !confirmed) {
