@@ -17,12 +17,15 @@ import com.qualcomm.robotcore.hardware.ServoImplEx;
 import com.qualcomm.robotcore.hardware.SwitchableLight;
 import com.qualcomm.robotcore.hardware.VoltageSensor;
 import com.qualcomm.robotcore.util.ElapsedTime;
+import com.qualcomm.robotcore.util.ReadWriteFile;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.hardware.lynx.LynxModule;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+import org.firstinspires.ftc.robotcore.internal.system.AppUtil;
 import org.firstinspires.ftc.teamcode.Prism.Color;
 import org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver;
 import org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver.LayerHeight;
@@ -30,6 +33,11 @@ import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
 
 /*
  * Mecanum drive + 2 velocity-controlled shooters + 2-motor intake + 4 servos, all mechanisms on toggles.
+ *
+ * SAVED RPM: every time a shooter target RPM changes, it is saved to a file on the CONTROL HUB
+ *   (/sdcard/FIRST/settings/ducktape_rpm.txt). The next run starts at those saved speeds.
+ *   Telemetry "RPM loaded from" shows whether this run started from the saved file or the defaults.
+ *   To go back to START_RPM_LEFT/RIGHT: set SAVE_RPM = false for one run, or tap the speeds back.
  *
  * GAMEPAD 1 — DRIVER (driving + intake)
  *   Left stick   : drive. ROBOT-CENTRIC: stick forward = the robot's front.
@@ -177,10 +185,27 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
     // Shooter speed. Each shooter has its own target.
     //   POLLEN shooter: gamepad1 D-pad up = +RPM_STEP, D-pad down = -RPM_STEP
     //   NECTAR shooter: gamepad1 B        = +RPM_STEP, A          = -RPM_STEP
+    // With SAVE_RPM = true these are only used when there's no saved file yet (or it can't be read).
     private static final double START_RPM_LEFT  = 2410;  // NECTAR (left shooter) speed at the start of the match
     private static final double START_RPM_RIGHT = 2400;  // POLLEN (right shooter) speed at the start of the match
     private static final double RPM_STEP        = 10;    // change per tap (was 100)
     private static final double MIN_RPM         = 1000;  // D-pad down stops here
+
+    // ---- Remember RPM between runs ----
+    // true = last run's targets become this run's starting targets (saved on the Control Hub).
+    // To go back to START_RPM_LEFT/RIGHT: set false for one run, or just tap the speeds back.
+    private static final boolean SAVE_RPM = true;
+    private static final String  RPM_FILE = "ducktape_rpm.txt";   // lives in /sdcard/FIRST/settings/
+    private double savedRpmLeft = -1, savedRpmRight = -1;          // what's in the file right now
+
+    // ---- Pre-match confirm ----
+    // true = after INIT, the driver must press gamepad1 X to confirm alliance + RPMs.
+    // If Start is pressed without confirming, the robot stays DISABLED until X is pressed.
+    // Swapping the alliance during INIT clears the confirmation (must confirm again).
+    private static final boolean REQUIRE_CONFIRM = true;
+    private boolean confirmed = false;
+    private boolean lastConfirmX = false;
+    private String rpmSource = "defaults (no saved file yet)";
 
     // ---- Fire gate (servo1 = nectar, servo2 = pollen; servo3 is NOT gated) ----
     // A fire servo will only move if its shooter is ON and the ACTUAL RPM has stayed within
@@ -477,6 +502,9 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
 
     @Override
     public void runOpMode() {
+        // Load last run's shooter speeds FIRST, so the RPM light strips show them from the start.
+        loadSavedRpm();
+
         frontLeft    = hardwareMap.get(DcMotor.class, "FLM");
         frontRight   = hardwareMap.get(DcMotor.class, "FRM");
         backLeft     = hardwareMap.get(DcMotor.class, "BLM");
@@ -582,8 +610,11 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         pidfActiveLeft  = pidfText(shooterLeft.getPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER));
         pidfActiveRight = pidfText(shooterRight.getPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER));
 
-        // During INIT: keep reading the sensors so you can tune colors before the match starts.
+        // During INIT: keep reading the sensors so you can tune colors before the match starts,
+        // and let gamepad2 Start pick the alliance color.
         while (!isStarted() && !isStopRequested()) {
+            handleAllianceToggle();
+            checkConfirm();
             readColorSensors();
             updateTelemetry();
             sleep(50);
@@ -596,11 +627,23 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
                 hub.clearBulkCache();
             }
 
+            // Not confirmed yet: robot stays disabled until gamepad1 X is pressed.
+            if (REQUIRE_CONFIRM && !confirmed) {
+                checkConfirm();
+                if (!confirmed) {
+                    haltMotors();
+                    updateTelemetry();
+                    continue;
+                }
+                lastX = gamepad1.x;   // so the confirm press doesn't also toggle snap-to-angle
+            }
+
             updateShooterSettle();   // must run BEFORE handleToggles so the fire gate uses this loop's RPM
             updateShotLog();
             updateVoltageComp();
             drive();
             handleToggles();
+            saveRpmIfChanged();      // writes to the Control Hub only when a target RPM changed
             colorSort();
             countLimitSwitch();
             runMechanisms();
@@ -611,6 +654,50 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         }
 
         stopAll();
+    }
+
+    // ---------------- Saved RPM (Control Hub storage) ----------------
+    // File: /sdcard/FIRST/settings/ducktape_rpm.txt, one line: "leftRpm,rightRpm".
+    private File rpmFile() {
+        return AppUtil.getInstance().getSettingsFile(RPM_FILE);
+    }
+
+    // Loads last run's targets. Missing or bad file = keep START_RPM_LEFT/RIGHT.
+    private void loadSavedRpm() {
+        if (!SAVE_RPM) {
+            rpmSource = "defaults (SAVE_RPM is off)";
+            return;
+        }
+        try {
+            File f = rpmFile();
+            if (f.exists()) {
+                String[] p = ReadWriteFile.readFile(f).trim().split(",");
+                double l = Double.parseDouble(p[0].trim());
+                double r = Double.parseDouble(p[1].trim());
+                if (l >= MIN_RPM && l <= SHOOTER_MAX_RPM) targetRpmLeft = l;
+                if (r >= MIN_RPM && r <= SHOOTER_MAX_RPM) targetRpmRight = r;
+                rpmSource = "saved file";
+            }
+        } catch (Exception e) {
+            targetRpmLeft  = START_RPM_LEFT;
+            targetRpmRight = START_RPM_RIGHT;
+            rpmSource = "defaults (saved file unreadable)";
+        }
+        savedRpmLeft  = targetRpmLeft;
+        savedRpmRight = targetRpmRight;
+    }
+
+    // Writes only when a target actually changed, so it doesn't slow the loop.
+    private void saveRpmIfChanged() {
+        if (!SAVE_RPM) return;
+        if (targetRpmLeft == savedRpmLeft && targetRpmRight == savedRpmRight) return;
+        try {
+            ReadWriteFile.writeFile(rpmFile(), targetRpmLeft + "," + targetRpmRight);
+            savedRpmLeft  = targetRpmLeft;
+            savedRpmRight = targetRpmRight;
+        } catch (Exception e) {
+            // storage problem: keep running, try again on the next change
+        }
     }
 
     // ---------------- Shooter PIDF ----------------
@@ -908,16 +995,7 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         lastDpadUp2 = dUp2;
 
         // Second Prism strip: gamepad2 Start swaps red <-> blue (this is also our ball color).
-        boolean start2 = gamepad2.start;
-        if (start2 && !lastStart2) {
-            strip2Blue = !strip2Blue;
-            strip2Solid.setPrimaryColor(strip2Blue ? Color.BLUE : Color.RED);
-            // While the siren is running, the new color waits and shows when the siren ends.
-            if (lightsOn && !alertActive) {
-                prism.insertAndUpdateAnimation(LayerHeight.LAYER_1, strip2Solid);
-            }
-        }
-        lastStart2 = start2;
+        handleAllianceToggle();
 
         // ALERT: gamepad2 D-pad down = siren on strip 2 + intake reverse for ALERT_SEC.
         // Pressing it again while it's running does nothing.
@@ -929,6 +1007,43 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
 
         lastRT1 = rt1; lastLT1 = lt1; lastUp = up; lastDown = down; lastRB = rb; lastLB = lb; lastA2 = a2;
         lastB2 = b2; lastX2 = x2; lastY1 = y1; lastLeft2 = left2; lastRight2 = right2;
+    }
+
+    // ---------------- Alliance color (gamepad2 Start) ----------------
+    // Works during INIT and during the match. Swaps strip 2 RED <-> BLUE, which is also
+    // OUR ball color for color sorting.
+    private void handleAllianceToggle() {
+        boolean start2 = gamepad2.start;
+        if (start2 && !lastStart2) {
+            strip2Blue = !strip2Blue;
+            if (!isStarted()) confirmed = false;   // changed alliance in INIT: confirm again
+            strip2Solid.setPrimaryColor(strip2Blue ? Color.BLUE : Color.RED);
+            // While the siren is running, the new color waits and shows when the siren ends.
+            if (lightsOn && !alertActive) {
+                prism.insertAndUpdateAnimation(LayerHeight.LAYER_1, strip2Solid);
+            }
+        }
+        lastStart2 = start2;
+    }
+
+    // ---------------- Pre-match confirm (gamepad1 X) ----------------
+    private void checkConfirm() {
+        if (!REQUIRE_CONFIRM) return;
+        boolean x = gamepad1.x;
+        if (x && !lastConfirmX && !confirmed) {
+            confirmed = true;
+            gamepad1.rumbleBlips(1);   // feel it: confirmed
+        }
+        lastConfirmX = x;
+    }
+
+    // All motors off without touching the lights (used while waiting for confirm).
+    private void haltMotors() {
+        for (DcMotor m : new DcMotor[]{frontLeft, frontRight, backLeft, backRight, intakeLeft, intakeRight}) {
+            m.setPower(0);
+        }
+        shooterLeft.setPower(0);
+        shooterRight.setPower(0);
     }
 
     // ---------------- Fire gate ----------------
@@ -1417,6 +1532,22 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
 
     // Telemetry: battery voltage, both shooters' RPM, and the live fire settle time.
     private void updateTelemetry() {
+        // Confirm box at the top of the Driver Station screen.
+        if (REQUIRE_CONFIRM && !confirmed) {
+            double nT = NECTAR_IS_LEFT_SHOOTER ? targetRpmLeft  : targetRpmRight;
+            double pT = NECTAR_IS_LEFT_SHOOTER ? targetRpmRight : targetRpmLeft;
+            telemetry.addLine("==================================");
+            telemetry.addLine(isStarted()
+                    ? "!!! NOT CONFIRMED - ROBOT DISABLED !!!"
+                    : "        PRE-MATCH CHECK");
+            telemetry.addLine("  Alliance : " + (strip2Blue ? "BLUE" : "RED"));
+            telemetry.addLine(String.format("  NECTAR %.0f RPM   POLLEN %.0f RPM", nT, pT));
+            telemetry.addLine("  >> GAMEPAD 1: press X to CONFIRM <<");
+            telemetry.addLine("==================================");
+        } else if (REQUIRE_CONFIRM && !isStarted()) {
+            telemetry.addLine("CONFIRMED - ready to START");
+        }
+
         double volts = batteryVoltage();
         if (volts > 0) minVolts = Math.min(minVolts, volts);
         telemetry.addData("Battery", "%.2f V   (lowest this run: %.2f V)", volts, minVolts);
@@ -1427,12 +1558,15 @@ public class DuckTapeRobotics_1_0 extends LinearOpMode {
         double pollenTarget = NECTAR_IS_LEFT_SHOOTER ? targetRpmRight : targetRpmLeft;
         telemetry.addData("POLLEN RPM", "%.0f / target %.0f", pollenRpm, pollenTarget);
         telemetry.addData("NECTAR RPM", "%.0f / target %.0f", nectarRpm, nectarTarget);
+        telemetry.addData("Alliance", strip2Blue ? "BLUE  (gamepad2 Start to swap)" : "RED  (gamepad2 Start to swap)");
+        telemetry.addData("RPM loaded from", rpmSource);
         telemetry.addData("Fire window", "+/-%.0f RPM", fireToleranceRpm);
         telemetry.addData("Fire settle", "%.2f s", fireSettleSec);
         telemetry.update();
     }
 
     private void stopAll() {
+        saveRpmIfChanged();   // last chance to save the final speeds
         for (DcMotor m : new DcMotor[]{frontLeft, frontRight, backLeft, backRight, intakeLeft, intakeRight}) {
             m.setPower(0);
         }
