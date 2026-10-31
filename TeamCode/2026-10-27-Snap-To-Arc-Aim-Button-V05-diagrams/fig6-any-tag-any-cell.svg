@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1348" viewBox="0 0 1600 1348">
+<rect x="0" y="0" width="1600" height="1348" fill="#ffffff"/>
+<text x="800.0" y="44.0" font-family="Arial, Helvetica, sans-serif" font-size="31" font-weight="bold" fill="#000000" text-anchor="middle">How any tag, on any cell, leads to the same aim point</text>
+<text x="800.0" y="78.0" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="normal" fill="#333333" text-anchor="middle">The code knows one sticker layout. The tag numbers only say which cell and which slot.</text>
+<rect x="30.0" y="130.0" width="900.0" height="620.0" rx="6" fill="#ffffff" fill-opacity="1.0" stroke="#666666" stroke-width="2"/>
+<text x="480.0" y="166.0" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="bold" fill="#000000" text-anchor="middle">One row of four tags, as the camera sees it</text>
+<text x="480.0" y="194.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#333333" text-anchor="middle">Example: red audience cell, tags 34-37, looking up at the cell's underside</text>
+<rect x="76.7" y="257.9" width="806.6" height="235.0" rx="8" fill="#ffffff" fill-opacity="1.0" stroke="#666666" stroke-width="2"/>
+<rect x="98.2" y="295.6" width="152.7" height="152.7" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<rect x="132.0" y="329.4" width="85.1" height="85.1" rx="0" fill="#ffffff" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="174.6" y="383.0" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="#000000" text-anchor="middle">34</text>
+<rect x="274.4" y="295.6" width="152.7" height="152.7" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<rect x="308.2" y="329.4" width="85.1" height="85.1" rx="0" fill="#ffffff" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="350.8" y="383.0" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="#000000" text-anchor="middle">35</text>
+<rect x="532.9" y="295.6" width="152.7" height="152.7" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<rect x="566.7" y="329.4" width="85.1" height="85.1" rx="0" fill="#ffffff" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="609.2" y="383.0" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="#000000" text-anchor="middle">36</text>
+<rect x="709.1" y="295.6" width="152.7" height="152.7" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<rect x="742.9" y="329.4" width="85.1" height="85.1" rx="0" fill="#ffffff" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="785.4" y="383.0" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="#000000" text-anchor="middle">37</text>
+<line x1="480.0" y1="257.9" x2="480.0" y2="584.9" stroke="#000000" stroke-width="3" stroke-opacity="1.0" stroke-linecap="round"/>
+<circle cx="480.0" cy="372.0" r="10.0" fill="#ffffff" fill-opacity="1.0" stroke="#000000" stroke-width="3"/>
+<text x="480.0" y="245.9" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#000000" text-anchor="middle">middle of the row</text>
+<line x1="174.6" y1="528.9" x2="492.0" y2="528.9" stroke="#000000" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<polygon points="492.0,528.9 478.0,521.9 478.0,535.9" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="174.6" cy="528.9" r="6.0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="327.3" y="520.9" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="bold" fill="#000000" text-anchor="middle">165 mm right</text>
+<line x1="350.8" y1="568.9" x2="492.0" y2="568.9" stroke="#000000" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<polygon points="492.0,568.9 478.0,561.9 478.0,575.9" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="350.8" cy="568.9" r="6.0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="415.4" y="560.9" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="bold" fill="#000000" text-anchor="middle">70 mm right</text>
+<line x1="609.2" y1="528.9" x2="468.0" y2="528.9" stroke="#000000" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<polygon points="468.0,528.9 482.0,535.9 482.0,521.9" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="609.2" cy="528.9" r="6.0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="544.6" y="520.9" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="bold" fill="#000000" text-anchor="middle">70 mm left</text>
+<line x1="785.4" y1="568.9" x2="468.0" y2="568.9" stroke="#000000" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<polygon points="468.0,568.9 482.0,575.9 482.0,561.9" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="785.4" cy="568.9" r="6.0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="632.7" y="560.9" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="bold" fill="#000000" text-anchor="middle">165 mm left</text>
+<text x="54.0" y="698.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#000000" text-anchor="start">Slot 1 (lowest number) is 165 mm left of the middle, slot 2 is 70 mm left, slot 3 is 70 mm</text>
+<text x="54.0" y="722.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#000000" text-anchor="start">right, slot 4 is 165 mm right.</text>
+<rect x="950.0" y="130.0" width="620.0" height="620.0" rx="6" fill="#ffffff" fill-opacity="1.0" stroke="#666666" stroke-width="2"/>
+<text x="1260.0" y="166.0" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="bold" fill="#000000" text-anchor="middle">From the row's middle to the aim point</text>
+<text x="1260.0" y="194.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#333333" text-anchor="middle">Top view of the up cell</text>
+<polygon points="1093.5,617.2 1526.5,617.2 1526.5,321.2 1310.0,240.0 1093.5,321.2" fill="#ffffff" fill-opacity="1.0" stroke="#000000" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<line x1="1101.7" y1="601.0" x2="1518.3" y2="601.0" stroke="#000000" stroke-width="7" stroke-opacity="1.0" stroke-linecap="round"/>
+<rect x="1141.0" y="437.6" width="67.2" height="67.2" rx="0" fill="#ffffff" fill-opacity="1.0" stroke="#000000" stroke-width="2.5"/>
+<rect x="1219.1" y="437.6" width="67.2" height="67.2" rx="0" fill="#ffffff" fill-opacity="1.0" stroke="#000000" stroke-width="2.5"/>
+<rect x="1333.7" y="437.6" width="67.2" height="67.2" rx="0" fill="#ffffff" fill-opacity="1.0" stroke="#000000" stroke-width="2.5"/>
+<rect x="1411.8" y="437.6" width="67.2" height="67.2" rx="0" fill="#ffffff" fill-opacity="1.0" stroke="#000000" stroke-width="2.5"/>
+<circle cx="1310.0" cy="471.2" r="9.0" fill="#ffffff" fill-opacity="1.0" stroke="#000000" stroke-width="3"/>
+<text x="1310.0" y="426.1" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="bold" fill="#000000" text-anchor="middle">row middle (1268 mm up)</text>
+<circle cx="1310.0" cy="539.5" r="10.0" fill="#ffffff" fill-opacity="1.0" stroke="#000000" stroke-width="3"/>
+<line x1="1295.0" y1="539.5" x2="1325.0" y2="539.5" stroke="#000000" stroke-width="2.2" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1310.0" y1="524.5" x2="1310.0" y2="554.5" stroke="#000000" stroke-width="2.2" stroke-opacity="1.0" stroke-linecap="round"/>
+<text x="1330.0" y="545.5" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#000000" text-anchor="start">aim point</text>
+<text x="1093.5" y="643.2" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#000000" text-anchor="start">bottom lip (the thick line)</text>
+<line x1="1064.0" y1="471.2" x2="1064.0" y2="539.5" stroke="#000000" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1056.0" y1="471.2" x2="1072.0" y2="471.2" stroke="#000000" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1056.0" y1="539.5" x2="1072.0" y2="539.5" stroke="#000000" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<text x="1052.0" y="511.4" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#000000" text-anchor="end">83 mm</text>
+<line x1="1064.0" y1="539.5" x2="1064.0" y2="601.0" stroke="#000000" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1056.0" y1="539.5" x2="1072.0" y2="539.5" stroke="#000000" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1056.0" y1="601.0" x2="1072.0" y2="601.0" stroke="#000000" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<text x="1052.0" y="576.2" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#000000" text-anchor="end">75 mm</text>
+<line x1="1310.0" y1="653.2" x2="1310.0" y2="687.2" stroke="#000000" stroke-width="3" stroke-opacity="1.0" stroke-linecap="round"/>
+<polygon points="1310.0,687.2 1317.0,673.2 1303.0,673.2" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1324.0" y="673.2" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#000000" text-anchor="start">toward you (your wall)</text>
+<text x="1310.0" y="356.4" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="bold" fill="#333333" text-anchor="middle">four tags (on the underside)</text>
+<rect x="30.0" y="780.0" width="1540.0" height="330.0" rx="6" fill="#ffffff" fill-opacity="1.0" stroke="#666666" stroke-width="2"/>
+<text x="800.0" y="818.0" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="bold" fill="#000000" text-anchor="middle">The four cells, each as seen by the camera of a robot shooting at it</text>
+<text x="222.5" y="868.0" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="bold" fill="#000000" text-anchor="middle">Red audience cell</text>
+<rect x="65.5" y="896.8" width="313.9" height="84.2" rx="5" fill="#ffffff" fill-opacity="1.0" stroke="#666666" stroke-width="1.5"/>
+<rect x="73.9" y="906.3" width="59.4" height="59.4" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="103.6" y="944.0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">34</text>
+<rect x="142.5" y="906.3" width="59.4" height="59.4" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="172.2" y="944.0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">35</text>
+<rect x="243.1" y="906.3" width="59.4" height="59.4" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="272.8" y="944.0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">36</text>
+<rect x="311.7" y="906.3" width="59.4" height="59.4" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="341.4" y="944.0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">37</text>
+<text x="222.5" y="1022.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#000000" text-anchor="middle">34 = slot 1, on the left</text>
+<text x="222.5" y="1046.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#000000" text-anchor="middle">37 = slot 4, on the right</text>
+<text x="607.5" y="868.0" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="bold" fill="#000000" text-anchor="middle">Red rear cell</text>
+<rect x="450.5" y="896.8" width="313.9" height="84.2" rx="5" fill="#ffffff" fill-opacity="1.0" stroke="#666666" stroke-width="1.5"/>
+<rect x="458.9" y="906.3" width="59.4" height="59.4" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="488.6" y="944.0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">30</text>
+<rect x="527.5" y="906.3" width="59.4" height="59.4" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="557.2" y="944.0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">31</text>
+<rect x="628.1" y="906.3" width="59.4" height="59.4" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="657.8" y="944.0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">32</text>
+<rect x="696.7" y="906.3" width="59.4" height="59.4" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="726.4" y="944.0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">33</text>
+<text x="607.5" y="1022.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#000000" text-anchor="middle">30 = slot 1, on the left</text>
+<text x="607.5" y="1046.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#000000" text-anchor="middle">33 = slot 4, on the right</text>
+<text x="992.5" y="868.0" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="bold" fill="#000000" text-anchor="middle">Blue audience cell</text>
+<rect x="835.5" y="896.8" width="313.9" height="84.2" rx="5" fill="#ffffff" fill-opacity="1.0" stroke="#666666" stroke-width="1.5"/>
+<rect x="843.9" y="906.3" width="59.4" height="59.4" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="873.6" y="944.0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">38</text>
+<rect x="912.5" y="906.3" width="59.4" height="59.4" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="942.2" y="944.0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">39</text>
+<rect x="1013.1" y="906.3" width="59.4" height="59.4" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="1042.8" y="944.0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">40</text>
+<rect x="1081.7" y="906.3" width="59.4" height="59.4" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="1111.4" y="944.0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">41</text>
+<text x="992.5" y="1022.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#000000" text-anchor="middle">38 = slot 1, on the left</text>
+<text x="992.5" y="1046.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#000000" text-anchor="middle">41 = slot 4, on the right</text>
+<text x="1377.5" y="868.0" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="bold" fill="#000000" text-anchor="middle">Blue rear cell</text>
+<rect x="1220.5" y="896.8" width="313.9" height="84.2" rx="5" fill="#ffffff" fill-opacity="1.0" stroke="#666666" stroke-width="1.5"/>
+<rect x="1228.9" y="906.3" width="59.4" height="59.4" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="1258.6" y="944.0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">42</text>
+<rect x="1297.5" y="906.3" width="59.4" height="59.4" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="1327.2" y="944.0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">43</text>
+<rect x="1398.1" y="906.3" width="59.4" height="59.4" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="1427.8" y="944.0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">44</text>
+<rect x="1466.7" y="906.3" width="59.4" height="59.4" rx="0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="1496.4" y="944.0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">45</text>
+<text x="1377.5" y="1022.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#000000" text-anchor="middle">42 = slot 1, on the left</text>
+<text x="1377.5" y="1046.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#000000" text-anchor="middle">45 = slot 4, on the right</text>
+<line x1="30.0" y1="1152.0" x2="1570.0" y2="1152.0" stroke="#999999" stroke-width="1.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<text x="40.0" y="1180.0" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#000000" text-anchor="start">Top left: one row of tags</text>
+<text x="40.0" y="1205.7" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">Each tag's place along the row is printed in the</text>
+<text x="40.0" y="1231.3" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">manual. From any one tag, slide its listed</text>
+<text x="40.0" y="1257.0" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">distance along the row to reach the row's</text>
+<text x="40.0" y="1282.6" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">middle.</text>
+<text x="553.3" y="1180.0" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#000000" text-anchor="start">Top right: row middle to aim point</text>
+<text x="553.3" y="1205.7" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">The lip is 158 mm from the row's middle, toward</text>
+<text x="553.3" y="1231.3" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">you. The aim point is 75 mm behind the lip: 83</text>
+<text x="553.3" y="1257.0" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">mm from the row's middle.</text>
+<text x="1066.7" y="1180.0" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#000000" text-anchor="start">Bottom: the four cells</text>
+<text x="1066.7" y="1205.7" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">Same sticker, same shape, different numbers.</text>
+<text x="1066.7" y="1231.3" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">Seen from the robot, the lowest number is always</text>
+<text x="1066.7" y="1257.0" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">on the LEFT of the camera picture.</text>
+</svg>

@@ -1,0 +1,40 @@
+primary: robot center to aim point (75 mm behind the lip) = 1185.7 mm
+lip is 158.2 mm from the tag row middle, toward the wall
+
+EXPECTED CAMERA READINGS on the primary, camera as assumed (right / down / out, mm):
+  tag 34:  -165.1   +28.0  1486.8
+  tag 35:   -69.8   +28.0  1486.8
+  tag 36:   +69.8   +28.0  1486.8
+  tag 37:  +165.1   +28.0  1486.8
+
+MOUNT ERRORS, red audience cell. Worst error over 0/15/32/50/-32 deg around:
+case                                              no teach: dist     aim  after teach: dist     aim  tag height  row scale  taught dist
+camera mounted exactly as the code assumes               -0.0 mm  +0.00d            -0.0 mm  +0.00d    1267.7     1.000     1185.7
+turned 1 deg sideways on the robot (yaw)                 -0.0 mm  -0.85d            -0.0 mm  +0.00d    1267.7     1.000     1185.7
+tilted 45 deg instead of 44 (pitch)                     +17.5 mm  -0.00d            -0.0 mm  -0.00d    1248.6     1.000     1203.3
+rotated 1 deg around its lens (roll)                     +0.0 mm  +0.03d            +0.0 mm  +0.00d    1267.7     1.000     1185.7
+10 mm to one side of where the code thinks               +0.0 mm  -0.48d            -0.0 mm  -0.00d    1267.7     1.000     1185.8
+10 mm farther back than the code thinks                 -10.0 mm  +0.00d            -0.0 mm  +0.00d    1267.7     1.000     1175.7
+measures 2% long (tag size or lens setting)             +21.8 mm  -0.06d            -0.6 mm  -0.06d    1288.0     1.020     1207.5
+all of the above at once                                +29.1 mm  -1.37d            -0.6 mm  -0.06d    1269.0     1.020     1214.8
+
+ONE TEACH, ALL FOUR CELLS: teach on the red audience primary with every error above at once,
+then snap at each cell. Errors after teach (distance mm, aim deg) at 0/15/32/50/-32 deg around:
+  red audience (34-37)     +0.0/+0.00  -0.1/-0.02  -0.3/-0.04  -0.6/-0.06  -0.2/+0.04
+  red rear (30-33)         +0.0/+0.00  -0.1/-0.02  -0.3/-0.04  -0.6/-0.06  -0.2/+0.04
+  blue audience (38-41)    +0.0/+0.00  -0.1/-0.02  -0.3/-0.04  -0.6/-0.06  -0.2/+0.04
+  blue rear (42-45)        +0.0/+0.00  -0.1/-0.02  -0.3/-0.04  -0.6/-0.06  -0.2/+0.04
+
+WHICH TAGS ARE SEEN: camera exactly as assumed, red audience cell, 32 deg around. dist / turn:
+  tags (34, 35, 36, 37)     1185.7 mm  +0.00 deg
+  tags (34, 35, 36)         1185.7 mm  +0.00 deg
+  tags (35, 36)             1185.7 mm  +0.00 deg
+  tags (34, 35)             1185.7 mm  +0.00 deg
+  tags (36, 37)             1185.7 mm  +0.00 deg
+  tags (34, 37)             1185.7 mm  +0.00 deg
+
+OPTION D: where the aim line crosses the bottom lip, mm to your side of the lip's middle
+   aim depth      15d      32d      45d      55d
+        50mm       13       31       50       71
+        75mm       20       47       75      107
+       115mm       31       72      115      164

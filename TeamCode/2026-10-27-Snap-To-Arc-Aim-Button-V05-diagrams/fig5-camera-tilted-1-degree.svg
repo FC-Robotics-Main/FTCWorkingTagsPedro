@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1128" viewBox="0 0 1600 1128">
+<rect x="0" y="0" width="1600" height="1128" fill="#ffffff"/>
+<text x="800.0" y="44.0" font-family="Arial, Helvetica, sans-serif" font-size="31" font-weight="bold" fill="#000000" text-anchor="middle">The "camera tilted 1 degree" problem, and how the same press cancels it</text>
+<text x="800.0" y="78.0" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="normal" fill="#333333" text-anchor="middle">Seen from the side, cell to the right. The camera is really tilted up 45 degrees, but the code was told 44.</text>
+<rect x="30.0" y="130.0" width="500.0" height="760.0" rx="6" fill="#ffffff" fill-opacity="1.0" stroke="#666666" stroke-width="2"/>
+<text x="280.0" y="166.0" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="bold" fill="#000000" text-anchor="middle">A. Without teaching</text>
+<text x="280.0" y="194.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#333333" text-anchor="middle">The code places the tags too far away</text>
+<line x1="50.0" y1="620.0" x2="510.0" y2="620.0" stroke="#333333" stroke-width="3" stroke-opacity="1.0" stroke-linecap="round"/>
+<text x="500.0" y="644.0" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="bold" fill="#333333" text-anchor="end">tiles</text>
+<rect x="70.0" y="576.0" width="170.0" height="44.0" rx="0" fill="#b8b8b8" fill-opacity="1.0" stroke="#000000" stroke-width="2.5"/>
+<line x1="240.0" y1="576.0" x2="240.0" y2="620.0" stroke="#000000" stroke-width="10" stroke-opacity="1.0" stroke-linecap="round"/>
+<text x="78.0" y="644.0" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="bold" fill="#000000" text-anchor="start">FRONT</text>
+<text x="242.0" y="644.0" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="bold" fill="#000000" text-anchor="end">BACK</text>
+<line x1="380.0" y1="226.0" x2="510.0" y2="300.0" stroke="#000000" stroke-width="7" stroke-opacity="1.0" stroke-linecap="round"/>
+<circle cx="460.0" cy="270.0" r="9.0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="476.0" y="254.0" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="bold" fill="#000000" text-anchor="start">tags</text>
+<line x1="240.0" y1="562.0" x2="460.0" y2="270.0" stroke="#000000" stroke-width="3.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<polygon points="260.1,564.5 234.0,542.6 219.9,559.5 246.0,581.4" fill="#000000" fill-opacity="1.0" stroke="#000000" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="247.1" cy="553.6" r="5.5" fill="#ffffff" fill-opacity="1.0" stroke="#000000" stroke-width="1.5"/>
+<line x1="240.0" y1="562.0" x2="246.8" y2="554.7" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="251.6" y1="549.6" x2="258.4" y2="542.3" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="263.2" y1="537.1" x2="270.0" y2="529.8" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="274.8" y1="524.7" x2="281.6" y2="517.4" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="286.4" y1="512.3" x2="293.2" y2="505.0" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="298.0" y1="499.8" x2="304.8" y2="492.5" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="309.6" y1="487.4" x2="316.4" y2="480.1" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="321.2" y1="475.0" x2="328.0" y2="467.6" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="332.7" y1="462.5" x2="339.6" y2="455.2" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="344.3" y1="450.1" x2="351.2" y2="442.8" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="355.9" y1="437.7" x2="362.7" y2="430.3" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="367.5" y1="425.2" x2="374.3" y2="417.9" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="379.1" y1="412.8" x2="385.9" y2="405.5" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="390.7" y1="400.4" x2="397.5" y2="393.0" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="402.3" y1="387.9" x2="409.1" y2="380.6" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="413.9" y1="375.5" x2="420.7" y2="368.2" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="425.5" y1="363.1" x2="432.3" y2="355.7" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="437.1" y1="350.6" x2="443.9" y2="343.3" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="448.7" y1="338.2" x2="455.5" y2="330.9" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="460.3" y1="325.8" x2="467.1" y2="318.4" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="471.9" y1="313.3" x2="478.7" y2="306.0" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="483.5" y1="300.9" x2="489.3" y2="294.6" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<circle cx="489.3" cy="294.6" r="9.0" fill="#ffffff" fill-opacity="1.0" stroke="#000000" stroke-width="2.5"/>
+<text x="54.0" y="250.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#333333" text-anchor="start">Hollow circle = where</text>
+<text x="54.0" y="273.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#333333" text-anchor="start">the code thinks the</text>
+<text x="54.0" y="296.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#333333" text-anchor="start">tags are</text>
+<text x="54.0" y="760.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#000000" text-anchor="start">The code reads the tags as farther away than</text>
+<text x="54.0" y="784.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#000000" text-anchor="start">they are (1203 mm instead of 1186 mm), so the</text>
+<text x="54.0" y="808.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#000000" text-anchor="start">snap reverses the robot about 18 mm too close to</text>
+<text x="54.0" y="832.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#000000" text-anchor="start">the cell. Shots land a little long.</text>
+<rect x="550.0" y="130.0" width="500.0" height="760.0" rx="6" fill="#ffffff" fill-opacity="1.0" stroke="#666666" stroke-width="2"/>
+<text x="800.0" y="166.0" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="bold" fill="#000000" text-anchor="middle">B. The teach press, on the primary</text>
+<text x="800.0" y="194.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#333333" text-anchor="middle">The distance there is known to be right</text>
+<line x1="570.0" y1="620.0" x2="1030.0" y2="620.0" stroke="#333333" stroke-width="3" stroke-opacity="1.0" stroke-linecap="round"/>
+<text x="1020.0" y="644.0" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="bold" fill="#333333" text-anchor="end">tiles</text>
+<rect x="590.0" y="576.0" width="170.0" height="44.0" rx="0" fill="#b8b8b8" fill-opacity="1.0" stroke="#000000" stroke-width="2.5"/>
+<line x1="760.0" y1="576.0" x2="760.0" y2="620.0" stroke="#000000" stroke-width="10" stroke-opacity="1.0" stroke-linecap="round"/>
+<text x="598.0" y="644.0" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="bold" fill="#000000" text-anchor="start">FRONT</text>
+<text x="762.0" y="644.0" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="bold" fill="#000000" text-anchor="end">BACK</text>
+<line x1="900.0" y1="226.0" x2="1030.0" y2="300.0" stroke="#000000" stroke-width="7" stroke-opacity="1.0" stroke-linecap="round"/>
+<circle cx="980.0" cy="270.0" r="9.0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="996.0" y="254.0" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="bold" fill="#000000" text-anchor="start">tags</text>
+<line x1="760.0" y1="562.0" x2="980.0" y2="270.0" stroke="#000000" stroke-width="3.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<polygon points="780.1,564.5 754.0,542.6 739.9,559.5 766.0,581.4" fill="#000000" fill-opacity="1.0" stroke="#000000" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="767.1" cy="553.6" r="5.5" fill="#ffffff" fill-opacity="1.0" stroke="#000000" stroke-width="1.5"/>
+<rect x="570.0" y="666.0" width="297.2" height="58.8" rx="4" fill="#ffffff" fill-opacity="1.0" stroke="#000000" stroke-width="1.5"/>
+<text x="580.0" y="690.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#000000" text-anchor="start">camera reads 1203 mm;</text>
+<text x="580.0" y="713.4" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#000000" text-anchor="start">the real distance is 1186 mm</text>
+<text x="574.0" y="760.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#000000" text-anchor="start">On the primary you KNOW the distance is right.</text>
+<text x="574.0" y="784.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#000000" text-anchor="start">The press saves what the camera reads there,</text>
+<text x="574.0" y="808.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#000000" text-anchor="start">1203 mm, as "the right distance". The true</text>
+<text x="574.0" y="832.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#000000" text-anchor="start">number, 1186 mm, never matters.</text>
+<rect x="1070.0" y="130.0" width="500.0" height="760.0" rx="6" fill="#ffffff" fill-opacity="1.0" stroke="#666666" stroke-width="2"/>
+<text x="1320.0" y="166.0" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="bold" fill="#000000" text-anchor="middle">C. Any spot on the arc, after teaching</text>
+<text x="1320.0" y="194.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#333333" text-anchor="middle">The same error, so it cancels</text>
+<line x1="1090.0" y1="620.0" x2="1550.0" y2="620.0" stroke="#333333" stroke-width="3" stroke-opacity="1.0" stroke-linecap="round"/>
+<text x="1540.0" y="644.0" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="bold" fill="#333333" text-anchor="end">tiles</text>
+<rect x="1110.0" y="576.0" width="170.0" height="44.0" rx="0" fill="#b8b8b8" fill-opacity="1.0" stroke="#000000" stroke-width="2.5"/>
+<line x1="1280.0" y1="576.0" x2="1280.0" y2="620.0" stroke="#000000" stroke-width="10" stroke-opacity="1.0" stroke-linecap="round"/>
+<text x="1118.0" y="644.0" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="bold" fill="#000000" text-anchor="start">FRONT</text>
+<text x="1282.0" y="644.0" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="bold" fill="#000000" text-anchor="end">BACK</text>
+<line x1="1420.0" y1="226.0" x2="1550.0" y2="300.0" stroke="#000000" stroke-width="7" stroke-opacity="1.0" stroke-linecap="round"/>
+<circle cx="1500.0" cy="270.0" r="9.0" fill="#000000" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="1516.0" y="254.0" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="bold" fill="#000000" text-anchor="start">tags</text>
+<line x1="1280.0" y1="562.0" x2="1500.0" y2="270.0" stroke="#000000" stroke-width="3.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<polygon points="1300.1,564.5 1274.0,542.6 1259.9,559.5 1286.0,581.4" fill="#000000" fill-opacity="1.0" stroke="#000000" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="1287.1" cy="553.6" r="5.5" fill="#ffffff" fill-opacity="1.0" stroke="#000000" stroke-width="1.5"/>
+<line x1="1280.0" y1="562.0" x2="1286.8" y2="554.7" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1291.6" y1="549.6" x2="1298.4" y2="542.3" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1303.2" y1="537.1" x2="1310.0" y2="529.8" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1314.8" y1="524.7" x2="1321.6" y2="517.4" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1326.4" y1="512.3" x2="1333.2" y2="505.0" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1338.0" y1="499.8" x2="1344.8" y2="492.5" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1349.6" y1="487.4" x2="1356.4" y2="480.1" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1361.2" y1="475.0" x2="1368.0" y2="467.6" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1372.7" y1="462.5" x2="1379.6" y2="455.2" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1384.3" y1="450.1" x2="1391.2" y2="442.8" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1395.9" y1="437.7" x2="1402.7" y2="430.3" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1407.5" y1="425.2" x2="1414.3" y2="417.9" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1419.1" y1="412.8" x2="1425.9" y2="405.5" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1430.7" y1="400.4" x2="1437.5" y2="393.0" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1442.3" y1="387.9" x2="1449.1" y2="380.6" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1453.9" y1="375.5" x2="1460.7" y2="368.2" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1465.5" y1="363.1" x2="1472.3" y2="355.7" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1477.1" y1="350.6" x2="1483.9" y2="343.3" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1488.7" y1="338.2" x2="1495.5" y2="330.9" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1500.3" y1="325.8" x2="1507.1" y2="318.4" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1511.9" y1="313.3" x2="1518.7" y2="306.0" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<line x1="1523.5" y1="300.9" x2="1529.3" y2="294.6" stroke="#333333" stroke-width="2.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<circle cx="1529.3" cy="294.6" r="9.0" fill="#ffffff" fill-opacity="1.0" stroke="#000000" stroke-width="2.5"/>
+<text x="1094.0" y="250.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#333333" text-anchor="start">Hollow circle = where</text>
+<text x="1094.0" y="273.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#333333" text-anchor="start">the code thinks the</text>
+<text x="1094.0" y="296.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#333333" text-anchor="start">tags are</text>
+<text x="1094.0" y="760.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#000000" text-anchor="start">Around the arc the tags are the same height</text>
+<text x="1094.0" y="784.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#000000" text-anchor="start">above the camera, so the code is off by the same</text>
+<text x="1094.0" y="808.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#000000" text-anchor="start">18 mm in the same direction. It snaps to a</text>
+<text x="1094.0" y="832.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#000000" text-anchor="start">reading of 1203 mm, which is truly 1186 mm: just</text>
+<text x="1094.0" y="856.0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="normal" fill="#000000" text-anchor="start">right.</text>
+<line x1="30.0" y1="932.0" x2="1570.0" y2="932.0" stroke="#999999" stroke-width="1.5" stroke-opacity="1.0" stroke-linecap="round"/>
+<text x="40.0" y="960.0" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#000000" text-anchor="start">Lines</text>
+<text x="40.0" y="985.6" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">Solid line = the real line from the camera to</text>
+<text x="40.0" y="1011.3" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">the tags. Dashed line and hollow circle = where</text>
+<text x="40.0" y="1037.0" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">the code thinks the tags are. Black box = the</text>
+<text x="40.0" y="1062.6" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">camera, on the robot's back.</text>
+<text x="553.3" y="960.0" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#000000" text-anchor="start">Angles</text>
+<text x="553.3" y="985.6" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">The 1 degree error is drawn 6 times larger. Real</text>
+<text x="553.3" y="1011.3" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">size: the code puts the tags about 18 mm too far</text>
+<text x="553.3" y="1037.0" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">away and 19 mm too low.</text>
+<text x="1066.7" y="960.0" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#000000" text-anchor="start">Why it cancels</text>
+<text x="1066.7" y="985.6" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">The tags are about 1.0 m above the camera from</text>
+<text x="1066.7" y="1011.3" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">every spot on the arc, so a 1 degree tilt error</text>
+<text x="1066.7" y="1037.0" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="normal" fill="#000000" text-anchor="start">shifts the reading by the same 18 mm everywhere.</text>
+</svg>
