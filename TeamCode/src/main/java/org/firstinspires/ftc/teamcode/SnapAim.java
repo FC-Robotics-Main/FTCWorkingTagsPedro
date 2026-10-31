@@ -30,7 +30,12 @@ public class SnapAim {
     public static final double CAM_BACK_MM   = 180.0; // robot center to the lens, toward the back
     public static final double CAM_LEFT_MM   = 0.0;   // + = lens toward the robot's left side
     public static final double CAM_UP_MM     = 255.0; // lens height above the tiles
-    public static final double CAM_PITCH_DEG = 44.0;  // camera tilt up from level
+
+    // Camera tilt up from level. 2026-10-29: changed from 44.0 to 40.3. With 44.0, Snap Teach showed a
+    // tag height of 1330 mm instead of 1268 mm. Live camera readings from the primary spot give 1268 mm
+    // at 40.3 degrees (about 18 mm of tag height per degree). After changing this, run Snap Teach again:
+    // the saved teach was measured with the old tilt.
+    public static final double CAM_PITCH_DEG = 40.3;
 
     // ---- Cell sticker, from the manual (TU06 Figures 9-15 to 9-17). Same on all four cells. ----
     // Slot 1-4, left to right in the camera picture. Slot index = (tag ID - 30) % 4.
